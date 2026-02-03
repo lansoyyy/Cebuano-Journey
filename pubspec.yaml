@@ -37,6 +37,20 @@ dependencies:
   intl: ^0.20.2
   fluttertoast: ^8.2.4
   flutter_spinkit: ^5.2.0
+  
+  # Game Engine
+  flame: ^1.22.0
+  flame_audio: ^2.10.2
+  
+  # State Management & Storage
+  flutter_riverpod: ^2.6.1
+  shared_preferences: ^2.3.3
+  
+  # Audio
+  audioplayers: ^6.1.0
+  
+  # Utilities
+  collection: ^1.19.1
 
 dev_dependencies:
   flutter_test:
