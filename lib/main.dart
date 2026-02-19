@@ -1,8 +1,16 @@
 import 'package:flutter/material.dart';
-import 'core/theme/app_theme.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'features/home/main_menu_screen.dart';
 
-void main() {
-  runApp(const MyApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.landscapeLeft,
+    DeviceOrientation.landscapeRight,
+  ]);
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  runApp(const ProviderScope(child: MyApp()));
 }
 
 class MyApp extends StatelessWidget {
@@ -13,44 +21,8 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Cebuano Journey',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.system,
-      home: const PlaceholderScreen(),
-    );
-  }
-}
-
-/// Placeholder Screen
-/// This screen will be replaced with actual screens later
-class PlaceholderScreen extends StatelessWidget {
-  const PlaceholderScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.rocket_launch,
-              size: 100,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'Cebuano Journey',
-              style: Theme.of(context).textTheme.displayMedium,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'App architecture setup complete!',
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
-          ],
-        ),
-      ),
+      theme: ThemeData(useMaterial3: true),
+      home: const MainMenuScreen(),
     );
   }
 }
