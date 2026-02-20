@@ -24,10 +24,10 @@ class MainMenuScreen extends StatelessWidget {
           // Philippine Flag — right side
           Positioned(
             right: size.width * 0.06,
-            top: size.height * 0.12,
+            top: size.height * 0.5,
             child: Image.asset(
               'assets/images/Philippine Flag.png',
-              height: size.height * 0.60,
+              height: size.height * 0.3,
               fit: BoxFit.contain,
             ),
           ),
@@ -51,7 +51,7 @@ class _MenuPanel extends StatelessWidget {
     final double imgH = size.height * 0.92;
     final double imgW = imgH * 0.72;
     final double shieldTop = imgH * 0.40;
-    final double btnW = imgW * 0.80;
+    final double btnW = imgW * 0.65;
 
     return SizedBox(
       width: imgW,
