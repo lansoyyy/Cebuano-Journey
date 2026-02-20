@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
+import 'parallax_painter.dart';
 import '../home/options_screen.dart';
 
 class GameScreen extends StatefulWidget {
@@ -8,162 +10,194 @@ class GameScreen extends StatefulWidget {
   State<GameScreen> createState() => _GameScreenState();
 }
 
-class _GameScreenState extends State<GameScreen>
-    with SingleTickerProviderStateMixin {
-  // Character position (normalized 0.0–1.0)
-  double _charX = 0.45;
+class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
+  late final Ticker _ticker;
+  Duration _last = Duration.zero;
+
+  // World & parallax
+  double _worldX = 0.0;
+  double _cloudDrift = 0.0;
+
+  // Movement
   bool _movingLeft = false;
   bool _movingRight = false;
+
+  // Jump physics
   bool _isJumping = false;
-  double _charY = 0.0; // vertical offset for jump
-  late AnimationController _jumpController;
-  late Animation<double> _jumpAnim;
+  double _jumpY = 0.0; // px offset upward (negative = up)
+  double _jumpVY = 0.0; // velocity px/s
+
+  static const double _speed = 130.0;
+  static const double _jumpImpulse = -300.0;
+  static const double _gravity = 600.0;
 
   @override
   void initState() {
     super.initState();
-    _jumpController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
-    );
-    _jumpAnim =
-        Tween<double>(begin: 0, end: -0.18).animate(
-          CurvedAnimation(parent: _jumpController, curve: Curves.easeOut),
-        )..addStatusListener((status) {
-          if (status == AnimationStatus.completed) {
-            _jumpController.reverse();
-          } else if (status == AnimationStatus.dismissed) {
-            setState(() => _isJumping = false);
-          }
-        });
-    _jumpAnim.addListener(() => setState(() => _charY = _jumpAnim.value));
-
-    // Continuous movement loop
-    _runMovementLoop();
+    _ticker = createTicker(_onTick)..start();
   }
 
-  void _runMovementLoop() {
-    Future.delayed(const Duration(milliseconds: 16), () {
-      if (!mounted) return;
-      setState(() {
-        if (_movingLeft) _charX = (_charX - 0.005).clamp(0.05, 0.95);
-        if (_movingRight) _charX = (_charX + 0.005).clamp(0.05, 0.95);
-      });
-      _runMovementLoop();
+  void _onTick(Duration elapsed) {
+    final dt = _last == Duration.zero
+        ? 0.0
+        : (elapsed - _last).inMicroseconds / 1e6;
+    _last = elapsed;
+    setState(() {
+      _cloudDrift += 18.0 * dt;
+      if (_movingLeft) _worldX -= _speed * dt;
+      if (_movingRight) _worldX += _speed * dt;
+
+      if (_isJumping) {
+        _jumpVY += _gravity * dt;
+        _jumpY += _jumpVY * dt;
+        if (_jumpY >= 0) {
+          _jumpY = 0;
+          _jumpVY = 0;
+          _isJumping = false;
+        }
+      }
     });
   }
 
   void _jump() {
     if (!_isJumping) {
-      setState(() => _isJumping = true);
-      _jumpController.forward();
+      _isJumping = true;
+      _jumpVY = _jumpImpulse;
     }
   }
 
   @override
   void dispose() {
-    _jumpController.dispose();
+    _ticker.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
+    final groundY = size.height * 0.64;
+    final charH = size.height * 0.20;
+    final charW = charH * 0.55;
+    final charScreenX = size.width * 0.27;
+    final charTop = groundY - charH + _jumpY;
+    final btnSize = size.height * 0.185;
+    final btnGap = size.width * 0.022;
 
     return Scaffold(
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // Game background
+          // ── Animated parallax background ────────────────────────────────
           CustomPaint(
-            painter: _GameLevelPainter(),
+            painter: ParallaxPainter(worldX: _worldX, cloudDrift: _cloudDrift),
             child: const SizedBox.expand(),
           ),
 
-          // ── Character ────────────────────────────────────────────────────
+          // ── Character sprite ─────────────────────────────────────────────
           Positioned(
-            left: _charX * size.width - 20,
-            top: (size.height * 0.52 + _charY * size.height) - 60,
-            child: _CharacterSprite(size: size),
+            left: charScreenX - charW / 2,
+            top: charTop,
+            child: Image.asset(
+              'assets/images/user (1).png',
+              width: charW,
+              height: charH,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => CustomPaint(
+                size: Size(charW, charH),
+                painter: _PixelCharPainter(),
+              ),
+            ),
           ),
 
-          // ── HUD top-right: Pause/Option button ───────────────────────────
+          // ── Controls bottom bar (semi-transparent) ───────────────────────
           Positioned(
-            top: size.height * 0.03,
-            right: size.width * 0.02,
-            child: _HudButton(
-              icon: Icons.pause,
-              size: size,
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              height: size.height * 0.28,
+              color: const Color(0x66000000),
+            ),
+          ),
+
+          // ── D-pad (bottom-left) ──────────────────────────────────────────
+          Positioned(
+            bottom: size.height * 0.045,
+            left: size.width * 0.025,
+            child: Row(
+              children: [
+                _CircleBtn(
+                  size: btnSize,
+                  onDown: () => setState(() => _movingLeft = true),
+                  onUp: () => setState(() => _movingLeft = false),
+                  child: Icon(
+                    Icons.arrow_back_ios_rounded,
+                    color: Colors.white70,
+                    size: btnSize * 0.42,
+                  ),
+                ),
+                SizedBox(width: btnGap),
+                _CircleBtn(
+                  size: btnSize,
+                  onDown: () => setState(() => _movingRight = true),
+                  onUp: () => setState(() => _movingRight = false),
+                  child: Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    color: Colors.white70,
+                    size: btnSize * 0.42,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // ── A / B buttons (bottom-right) ─────────────────────────────────
+          Positioned(
+            bottom: size.height * 0.045,
+            right: size.width * 0.025,
+            child: Row(
+              children: [
+                _LabelBtn(
+                  label: 'A',
+                  color: Colors.green,
+                  size: btnSize,
+                  onTap: () {},
+                ),
+                SizedBox(width: btnGap),
+                _LabelBtn(
+                  label: 'B',
+                  color: Colors.red,
+                  size: btnSize,
+                  onTap: _jump,
+                ),
+              ],
+            ),
+          ),
+
+          // ── Pause button (top-right) ──────────────────────────────────────
+          Positioned(
+            top: size.height * 0.04,
+            right: size.width * 0.025,
+            child: GestureDetector(
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => const OptionsScreen(isInGame: true),
                 ),
               ),
-            ),
-          ),
-
-          // ── Left/Right D-pad (bottom-left) ───────────────────────────────
-          Positioned(
-            bottom: size.height * 0.06,
-            left: size.width * 0.02,
-            child: Row(
-              children: [
-                // Backward (mirrored Forward.png)
-                _DpadButton(
-                  child: Transform(
-                    alignment: Alignment.center,
-                    transform: Matrix4.rotationY(3.14159),
-                    child: Image.asset(
-                      'assets/images/Forward.png',
-                      width: size.height * 0.18,
-                      height: size.height * 0.18,
-                      fit: BoxFit.contain,
-                    ),
-                  ),
-                  onPointerDown: () => setState(() => _movingLeft = true),
-                  onPointerUp: () => setState(() => _movingLeft = false),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0x99000000),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.white38),
                 ),
-                SizedBox(width: size.width * 0.02),
-                // Forward
-                _DpadButton(
-                  child: Image.asset(
-                    'assets/images/Forward.png',
-                    width: size.height * 0.18,
-                    height: size.height * 0.18,
-                    fit: BoxFit.contain,
-                  ),
-                  onPointerDown: () => setState(() => _movingRight = true),
-                  onPointerUp: () => setState(() => _movingRight = false),
+                child: Icon(
+                  Icons.pause,
+                  color: Colors.white,
+                  size: size.height * 0.055,
                 ),
-              ],
-            ),
-          ),
-
-          // ── A (Interact) + B (Jump) buttons (bottom-right) ───────────────
-          Positioned(
-            bottom: size.height * 0.06,
-            right: size.width * 0.02,
-            child: Row(
-              children: [
-                // A — interaction
-                _ActionButton(
-                  label: 'A',
-                  size: size,
-                  color: const Color(0xFF888888),
-                  onTap: () {
-                    // Future: trigger interaction
-                  },
-                ),
-                SizedBox(width: size.width * 0.025),
-                // B — jump
-                _ActionButton(
-                  label: 'B',
-                  size: size,
-                  color: const Color(0xFF888888),
-                  onTap: _jump,
-                ),
-              ],
+              ),
             ),
           ),
         ],
@@ -172,78 +206,81 @@ class _GameScreenState extends State<GameScreen>
   }
 }
 
-// ── Character Sprite ──────────────────────────────────────────────────────────
-class _CharacterSprite extends StatelessWidget {
-  final Size size;
-  const _CharacterSprite({required this.size});
+// ── Circle button (D-pad) ─────────────────────────────────────────────────────
+class _CircleBtn extends StatefulWidget {
+  final double size;
+  final Widget child;
+  final VoidCallback onDown;
+  final VoidCallback onUp;
+  const _CircleBtn({
+    required this.size,
+    required this.child,
+    required this.onDown,
+    required this.onUp,
+  });
+
+  @override
+  State<_CircleBtn> createState() => _CircleBtnState();
+}
+
+class _CircleBtnState extends State<_CircleBtn> {
+  bool _pressed = false;
 
   @override
   Widget build(BuildContext context) {
-    return Image.asset(
-      'assets/images/user (1).png',
-      width: 40,
-      height: 60,
-      fit: BoxFit.contain,
-      errorBuilder: (_, __, ___) => Container(
-        width: 40,
-        height: 60,
-        decoration: BoxDecoration(
-          color: const Color(0xFFCC3366),
-          borderRadius: BorderRadius.circular(4),
+    return Listener(
+      onPointerDown: (_) {
+        setState(() => _pressed = true);
+        widget.onDown();
+      },
+      onPointerUp: (_) {
+        setState(() => _pressed = false);
+        widget.onUp();
+      },
+      onPointerCancel: (_) {
+        setState(() => _pressed = false);
+        widget.onUp();
+      },
+      child: AnimatedScale(
+        scale: _pressed ? 0.90 : 1.0,
+        duration: const Duration(milliseconds: 60),
+        child: Container(
+          width: widget.size,
+          height: widget.size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: _pressed ? const Color(0x55FFFFFF) : const Color(0x33FFFFFF),
+            border: Border.all(color: const Color(0xAABBBBBB), width: 3),
+          ),
+          child: Center(child: widget.child),
         ),
-        child: const Icon(Icons.person, color: Colors.white, size: 36),
       ),
     );
   }
 }
 
-// ── D-pad Button (hold-to-move) ───────────────────────────────────────────────
-class _DpadButton extends StatelessWidget {
-  final Widget child;
-  final VoidCallback onPointerDown;
-  final VoidCallback onPointerUp;
-
-  const _DpadButton({
-    required this.child,
-    required this.onPointerDown,
-    required this.onPointerUp,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Listener(
-      onPointerDown: (_) => onPointerDown(),
-      onPointerUp: (_) => onPointerUp(),
-      onPointerCancel: (_) => onPointerUp(),
-      child: child,
-    );
-  }
-}
-
-// ── Action Button (A / B) ─────────────────────────────────────────────────────
-class _ActionButton extends StatefulWidget {
+// ── Label button (A / B) ──────────────────────────────────────────────────────
+class _LabelBtn extends StatefulWidget {
   final String label;
-  final Size size;
   final Color color;
+  final double size;
   final VoidCallback onTap;
-
-  const _ActionButton({
+  const _LabelBtn({
     required this.label,
-    required this.size,
     required this.color,
+    required this.size,
     required this.onTap,
   });
 
   @override
-  State<_ActionButton> createState() => _ActionButtonState();
+  State<_LabelBtn> createState() => _LabelBtnState();
 }
 
-class _ActionButtonState extends State<_ActionButton> {
+class _LabelBtnState extends State<_LabelBtn> {
   bool _pressed = false;
 
   @override
   Widget build(BuildContext context) {
-    final btnSize = widget.size.height * 0.18;
     return Listener(
       onPointerDown: (_) {
         setState(() => _pressed = true);
@@ -252,24 +289,24 @@ class _ActionButtonState extends State<_ActionButton> {
       onPointerUp: (_) => setState(() => _pressed = false),
       onPointerCancel: (_) => setState(() => _pressed = false),
       child: AnimatedScale(
-        scale: _pressed ? 0.90 : 1.0,
-        duration: const Duration(milliseconds: 80),
+        scale: _pressed ? 0.88 : 1.0,
+        duration: const Duration(milliseconds: 60),
         child: Container(
-          width: btnSize,
-          height: btnSize,
+          width: widget.size,
+          height: widget.size,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: _pressed ? const Color(0xAABBBBBB) : const Color(0x88AAAAAA),
-            border: Border.all(color: const Color(0xCCCCCCCC), width: 3),
+            color: _pressed ? const Color(0x55FFFFFF) : const Color(0x33FFFFFF),
+            border: Border.all(color: const Color(0xAABBBBBB), width: 3),
           ),
           child: Center(
             child: Text(
               widget.label,
               style: TextStyle(
-                fontFamily: 'Bold',
-                fontSize: btnSize * 0.38,
-                color: Colors.white,
+                fontSize: widget.size * 0.40,
                 fontWeight: FontWeight.bold,
+                color: widget.color,
+                shadows: const [Shadow(color: Colors.black54, blurRadius: 4)],
               ),
             ),
           ),
@@ -279,121 +316,60 @@ class _ActionButtonState extends State<_ActionButton> {
   }
 }
 
-// ── HUD Pause Button ──────────────────────────────────────────────────────────
-class _HudButton extends StatelessWidget {
-  final IconData icon;
-  final Size size;
-  final VoidCallback onTap;
-
-  const _HudButton({
-    required this.icon,
-    required this.size,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: const Color(0xAA000000),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.white38),
-        ),
-        child: Icon(icon, color: Colors.white, size: size.height * 0.05),
-      ),
-    );
-  }
-}
-
-// ── Game Level Background Painter ─────────────────────────────────────────────
-class _GameLevelPainter extends CustomPainter {
+// ── Fallback pixel character painter ─────────────────────────────────────────
+class _PixelCharPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size s) {
-    // Sky
+    final skin = Paint()..color = const Color(0xFFD4956A);
+    final shirt = Paint()..color = const Color(0xFFCC3366);
+    final pants = Paint()..color = const Color(0xFF333366);
+    final hair = Paint()..color = const Color(0xFF3B1F0A);
+    // Hair
     canvas.drawRect(
-      Rect.fromLTWH(0, 0, s.width, s.height),
-      Paint()
-        ..shader = const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFF87CEEB), Color(0xFF5BB0D4)],
-        ).createShader(Rect.fromLTWH(0, 0, s.width, s.height)),
+      Rect.fromLTWH(s.width * 0.2, 0, s.width * 0.6, s.height * 0.18),
+      hair,
     );
-
-    // Distant hills
-    final hillPaint = Paint()..color = const Color(0xFF4A7C59);
-    final hillPath = Path()
-      ..moveTo(0, s.height * 0.55)
-      ..lineTo(s.width * 0.12, s.height * 0.38)
-      ..lineTo(s.width * 0.25, s.height * 0.50)
-      ..lineTo(s.width * 0.38, s.height * 0.32)
-      ..lineTo(s.width * 0.52, s.height * 0.48)
-      ..lineTo(s.width * 0.65, s.height * 0.35)
-      ..lineTo(s.width * 0.80, s.height * 0.50)
-      ..lineTo(s.width * 0.92, s.height * 0.40)
-      ..lineTo(s.width, s.height * 0.48)
-      ..lineTo(s.width, s.height * 0.55)
-      ..close();
-    canvas.drawPath(hillPath, hillPaint);
-
-    // Ground (dirt)
+    // Head
     canvas.drawRect(
-      Rect.fromLTWH(0, s.height * 0.58, s.width, s.height * 0.42),
-      Paint()..color = const Color(0xFF7A4E2D),
+      Rect.fromLTWH(
+        s.width * 0.15,
+        s.height * 0.08,
+        s.width * 0.7,
+        s.height * 0.22,
+      ),
+      skin,
     );
-
-    // Grass on top
+    // Body
     canvas.drawRect(
-      Rect.fromLTWH(0, s.height * 0.56, s.width, s.height * 0.045),
-      Paint()..color = const Color(0xFF4CAF50),
+      Rect.fromLTWH(
+        s.width * 0.18,
+        s.height * 0.30,
+        s.width * 0.64,
+        s.height * 0.32,
+      ),
+      shirt,
     );
-
-    // Pixel grass tufts
-    final tuffPaint = Paint()..color = const Color(0xFF388E3C);
-    for (int i = 0; i < 25; i++) {
-      canvas.drawRect(
-        Rect.fromLTWH(
-          s.width * (i / 25.0),
-          s.height * 0.540,
-          s.width * 0.018,
-          s.height * 0.028,
-        ),
-        tuffPaint,
-      );
-    }
-
-    // Some platform tiles
-    _drawPlatform(canvas, s, 0.20, 0.40, 0.12);
-    _drawPlatform(canvas, s, 0.55, 0.35, 0.10);
-    _drawPlatform(canvas, s, 0.78, 0.42, 0.08);
-  }
-
-  void _drawPlatform(
-    Canvas c,
-    Size s,
-    double xRatio,
-    double yRatio,
-    double wRatio,
-  ) {
-    final x = s.width * xRatio;
-    final y = s.height * yRatio;
-    final w = s.width * wRatio;
-    const h = 14.0;
-    // Dirt
-    c.drawRect(
-      Rect.fromLTWH(x, y, w, h),
-      Paint()..color = const Color(0xFF7A4E2D),
+    // Legs
+    canvas.drawRect(
+      Rect.fromLTWH(
+        s.width * 0.15,
+        s.height * 0.62,
+        s.width * 0.28,
+        s.height * 0.38,
+      ),
+      pants,
     );
-    // Grass top
-    c.drawRect(
-      Rect.fromLTWH(x, y - 4, w, 8),
-      Paint()..color = const Color(0xFF4CAF50),
+    canvas.drawRect(
+      Rect.fromLTWH(
+        s.width * 0.55,
+        s.height * 0.62,
+        s.width * 0.28,
+        s.height * 0.38,
+      ),
+      pants,
     );
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant CustomPainter old) => false;
 }
