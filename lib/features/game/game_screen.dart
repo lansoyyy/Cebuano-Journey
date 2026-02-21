@@ -31,6 +31,22 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   static const double _jumpImpulse = -300.0;
   static const double _gravity = 600.0;
 
+  // Sprite animation
+  static const _idleFrame = 'assets/images/Character/tile012.png';
+  static const _walkFrames = [
+    'assets/images/Character/tile016.png',
+    'assets/images/Character/tile017.png',
+    'assets/images/Character/tile018.png',
+    'assets/images/Character/tile019.png',
+    'assets/images/Character/tile020.png',
+    'assets/images/Character/tile021.png',
+  ];
+  static const double _frameDuration = 0.10; // 10 fps walk
+
+  int _walkFrame = 0;
+  double _frameTimer = 0.0;
+  bool _facingLeft = false;
+
   @override
   void initState() {
     super.initState();
@@ -55,6 +71,20 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           _jumpVY = 0;
           _isJumping = false;
         }
+      }
+
+      // Sprite walk cycle
+      if (_movingLeft || _movingRight) {
+        if (_movingLeft) _facingLeft = true;
+        if (_movingRight) _facingLeft = false;
+        _frameTimer += dt;
+        if (_frameTimer >= _frameDuration) {
+          _frameTimer -= _frameDuration;
+          _walkFrame = (_walkFrame + 1) % _walkFrames.length;
+        }
+      } else {
+        _walkFrame = 0;
+        _frameTimer = 0;
       }
     });
   }
@@ -97,14 +127,18 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           Positioned(
             left: charScreenX - charW / 2,
             top: charTop,
-            child: Image.asset(
-              'assets/images/user (1).png',
-              width: charW,
-              height: charH,
-              fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => CustomPaint(
-                size: Size(charW, charH),
-                painter: _PixelCharPainter(),
+            child: Transform(
+              alignment: Alignment.center,
+              transform: Matrix4.identity()
+                ..scale(_facingLeft ? -1.0 : 1.0, 1.0),
+              child: Image.asset(
+                (_movingLeft || _movingRight)
+                    ? _walkFrames[_walkFrame]
+                    : _idleFrame,
+                width: charW,
+                height: charH,
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.none,
               ),
             ),
           ),
@@ -314,62 +348,4 @@ class _LabelBtnState extends State<_LabelBtn> {
       ),
     );
   }
-}
-
-// ── Fallback pixel character painter ─────────────────────────────────────────
-class _PixelCharPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size s) {
-    final skin = Paint()..color = const Color(0xFFD4956A);
-    final shirt = Paint()..color = const Color(0xFFCC3366);
-    final pants = Paint()..color = const Color(0xFF333366);
-    final hair = Paint()..color = const Color(0xFF3B1F0A);
-    // Hair
-    canvas.drawRect(
-      Rect.fromLTWH(s.width * 0.2, 0, s.width * 0.6, s.height * 0.18),
-      hair,
-    );
-    // Head
-    canvas.drawRect(
-      Rect.fromLTWH(
-        s.width * 0.15,
-        s.height * 0.08,
-        s.width * 0.7,
-        s.height * 0.22,
-      ),
-      skin,
-    );
-    // Body
-    canvas.drawRect(
-      Rect.fromLTWH(
-        s.width * 0.18,
-        s.height * 0.30,
-        s.width * 0.64,
-        s.height * 0.32,
-      ),
-      shirt,
-    );
-    // Legs
-    canvas.drawRect(
-      Rect.fromLTWH(
-        s.width * 0.15,
-        s.height * 0.62,
-        s.width * 0.28,
-        s.height * 0.38,
-      ),
-      pants,
-    );
-    canvas.drawRect(
-      Rect.fromLTWH(
-        s.width * 0.55,
-        s.height * 0.62,
-        s.width * 0.28,
-        s.height * 0.38,
-      ),
-      pants,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter old) => false;
 }
