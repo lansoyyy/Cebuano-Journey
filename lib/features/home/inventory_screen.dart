@@ -1,19 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/providers/player_provider.dart';
+import '../../data/cebuano_word_bank.dart';
 import '../game/parallax_painter.dart';
 
-class InventoryScreen extends StatefulWidget {
+class InventoryScreen extends ConsumerStatefulWidget {
   const InventoryScreen({super.key});
 
   @override
-  State<InventoryScreen> createState() => _InventoryScreenState();
+  ConsumerState<InventoryScreen> createState() => _InventoryScreenState();
 }
 
-class _InventoryScreenState extends State<InventoryScreen>
+class _InventoryScreenState extends ConsumerState<InventoryScreen>
     with TickerProviderStateMixin {
   late final Ticker _ticker;
   Duration _last = Duration.zero;
   double _scrollX = 0.0;
+  String? _selectedCategory;
 
   @override
   void initState() {
@@ -35,31 +39,43 @@ class _InventoryScreenState extends State<InventoryScreen>
     super.dispose();
   }
 
+  static const _categories = [
+    'All',
+    'Greetings',
+    'Numbers',
+    'Colors',
+    'Food',
+    'Family',
+    'Places',
+    'Verbs',
+    'Adjectives',
+  ];
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    final titleH = size.height * 0.14;
-    final contentTop = titleH + size.height * 0.04;
-    final slotSize = size.height * 0.50;
-    final gridW = size.width * 0.44;
-    final gridH = size.height * 0.54;
-    final btnSize = size.height * 0.175;
-    final btnGap = size.width * 0.022;
+    final titleH = size.height * 0.13;
+    final player = ref.watch(playerProvider);
+
+    final allCollected = CebuanoWordBank.words
+        .where((w) => player.collectedWordIds.contains(w.id))
+        .toList();
+    final filtered = _selectedCategory == null || _selectedCategory == 'All'
+        ? allCollected
+        : allCollected.where((w) => w.category == _selectedCategory).toList();
 
     return Scaffold(
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // ── Animated urban background ───────────────────────────────────
+          // ── Animated urban background ────────────────────────────────────
           CustomPaint(
             painter: UrbanParallaxPainter(scrollX: _scrollX),
             child: const SizedBox.expand(),
           ),
+          Container(color: const Color(0x66000000)),
 
-          // ── Dark overlay so UI pops ─────────────────────────────────────
-          Container(color: const Color(0x55000000)),
-
-          // ── INVENTORY title bar ─────────────────────────────────────────
+          // ── Title bar ───────────────────────────────────────────────────
           Positioned(
             top: 0,
             left: 0,
@@ -67,128 +83,141 @@ class _InventoryScreenState extends State<InventoryScreen>
             child: Container(
               height: titleH,
               color: const Color(0xBB000000),
-              alignment: Alignment.center,
-              child: Text(
-                'INVENTORY',
-                style: TextStyle(
-                  fontSize: size.height * 0.075,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.white,
-                  letterSpacing: 6,
-                  shadows: const [Shadow(color: Colors.black, blurRadius: 8)],
-                ),
+              padding: EdgeInsets.symmetric(horizontal: size.width * 0.02),
+              child: Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Icon(
+                      Icons.arrow_back,
+                      color: Colors.white,
+                      size: size.height * 0.05,
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      'INVENTORY',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: size.height * 0.060,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                        letterSpacing: 4,
+                      ),
+                    ),
+                  ),
+                  // Hint powerup counter
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2A4A2A),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.lightbulb,
+                          color: Color(0xFFFFD700),
+                          size: 18,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'x${player.hintCount} Hints',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
 
-          // ── Equipped slot (left) + Storage grid (right) ─────────────────
+          // ── Category filter chips ───────────────────────────────────────
           Positioned(
-            top: contentTop,
+            top: titleH + 6,
             left: 0,
             right: 0,
-            bottom: size.height * 0.26,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                _EquippedSlot(size: slotSize),
-                SizedBox(width: size.width * 0.03),
-                _StorageGrid(width: gridW, height: gridH),
-              ],
+            child: SizedBox(
+              height: size.height * 0.075,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: EdgeInsets.symmetric(
+                  horizontal: size.width * 0.015,
+                  vertical: 6,
+                ),
+                children: _categories.map((cat) {
+                  final active = (_selectedCategory ?? 'All') == cat;
+                  return GestureDetector(
+                    onTap: () => setState(() => _selectedCategory = cat),
+                    child: Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: active
+                            ? const Color(0xFFFFD700)
+                            : const Color(0x441A3A5C),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: active
+                              ? const Color(0xFFFFD700)
+                              : Colors.white24,
+                        ),
+                      ),
+                      child: Text(
+                        cat,
+                        style: TextStyle(
+                          color: active ? Colors.black : Colors.white,
+                          fontWeight: active
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
             ),
           ),
 
-          // ── Control bar background ──────────────────────────────────────
+          // ── Word cards grid ─────────────────────────────────────────────
           Positioned(
+            top: titleH + size.height * 0.085,
+            left: 0,
+            right: 0,
             bottom: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              height: size.height * 0.26,
-              color: const Color(0x88000000),
-            ),
-          ),
-
-          // ── D-pad (bottom-left) ─────────────────────────────────────────
-          Positioned(
-            bottom: size.height * 0.04,
-            left: size.width * 0.025,
-            child: Row(
-              children: [
-                _CircleCtrlBtn(
-                  size: btnSize,
-                  child: Icon(
-                    Icons.arrow_back_ios_rounded,
-                    color: Colors.white70,
-                    size: btnSize * 0.42,
-                  ),
-                ),
-                SizedBox(width: btnGap),
-                _CircleCtrlBtn(
-                  size: btnSize,
-                  child: Icon(
-                    Icons.arrow_forward_ios_rounded,
-                    color: Colors.white70,
-                    size: btnSize * 0.42,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // ── A / B (bottom-right) ────────────────────────────────────────
-          Positioned(
-            bottom: size.height * 0.04,
-            right: size.width * 0.025,
-            child: Row(
-              children: [
-                _CircleCtrlBtn(
-                  size: btnSize,
-                  child: Text(
-                    'A',
-                    style: TextStyle(
-                      fontSize: btnSize * 0.40,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.green,
+            child: filtered.isEmpty
+                ? Center(
+                    child: Text(
+                      'No words collected yet.\nExplore levels to find words!',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white54,
+                        fontSize: size.height * 0.03,
+                      ),
                     ),
-                  ),
-                ),
-                SizedBox(width: btnGap),
-                _CircleCtrlBtn(
-                  size: btnSize,
-                  child: Text(
-                    'B',
-                    style: TextStyle(
-                      fontSize: btnSize * 0.40,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.red,
+                  )
+                : GridView.builder(
+                    padding: EdgeInsets.all(size.width * 0.015),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 4,
+                      crossAxisSpacing: 8,
+                      mainAxisSpacing: 8,
+                      childAspectRatio: 1.5,
                     ),
+                    itemCount: filtered.length,
+                    itemBuilder: (_, i) => _WordCard(word: filtered[i]),
                   ),
-                ),
-              ],
-            ),
-          ),
-
-          // ── Back button (top-left) ──────────────────────────────────────
-          Positioned(
-            top: size.height * 0.02,
-            left: size.width * 0.02,
-            child: GestureDetector(
-              onTap: () => Navigator.pop(context),
-              child: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0x99000000),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.white38),
-                ),
-                child: Icon(
-                  Icons.arrow_back,
-                  color: Colors.white,
-                  size: size.height * 0.05,
-                ),
-              ),
-            ),
           ),
         ],
       ),
@@ -196,96 +225,58 @@ class _InventoryScreenState extends State<InventoryScreen>
   }
 }
 
-// ── Equipped slot ─────────────────────────────────────────────────────────────
-class _EquippedSlot extends StatelessWidget {
-  final double size;
-  const _EquippedSlot({required this.size});
+// ── Word card ─────────────────────────────────────────────────────────────────
+class _WordCard extends StatefulWidget {
+  final dynamic word;
+  const _WordCard({required this.word});
+
+  @override
+  State<_WordCard> createState() => _WordCardState();
+}
+
+class _WordCardState extends State<_WordCard> {
+  bool _flipped = false;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF555555), width: 3),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFFCCCCCC), Color(0xFF888888)],
+    return GestureDetector(
+      onTap: () => setState(() => _flipped = !_flipped),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        decoration: BoxDecoration(
+          color: _flipped ? const Color(0xFF1A4A2A) : const Color(0xFF1A2A45),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: _flipped ? const Color(0xFF4CAF50) : const Color(0xFF3A6EA5),
+            width: 1.5,
+          ),
         ),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x88000000),
-            blurRadius: 8,
-            offset: Offset(3, 3),
-          ),
-        ],
-      ),
-      child: const Center(
-        child: Icon(Icons.person, size: 56, color: Color(0x55000000)),
-      ),
-    );
-  }
-}
-
-// ── Storage grid ──────────────────────────────────────────────────────────────
-class _StorageGrid extends StatelessWidget {
-  final double width;
-  final double height;
-  const _StorageGrid({required this.width, required this.height});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: width,
-      height: height,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Image.asset('assets/images/Storage.png', fit: BoxFit.fill),
-          Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: width * 0.04,
-              vertical: height * 0.06,
-            ),
-            child: GridView.count(
-              crossAxisCount: 3,
-              mainAxisSpacing: height * 0.06,
-              crossAxisSpacing: width * 0.04,
-              physics: const NeverScrollableScrollPhysics(),
-              children: List.generate(
-                6,
-                (_) => GestureDetector(
-                  onTap: () {},
-                  child: Container(color: Colors.transparent),
-                ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              _flipped ? widget.word.english : widget.word.cebuano,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xFFFFD700),
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
               ),
             ),
-          ),
-        ],
+            const SizedBox(height: 2),
+            Text(
+              _flipped ? widget.word.cebuano : widget.word.english,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white70, fontSize: 11),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              widget.word.category,
+              style: const TextStyle(color: Colors.white38, fontSize: 9),
+            ),
+          ],
+        ),
       ),
-    );
-  }
-}
-
-// ── Circle control button (inactive, display only) ────────────────────────────
-class _CircleCtrlBtn extends StatelessWidget {
-  final double size;
-  final Widget child;
-  const _CircleCtrlBtn({required this.size, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: const Color(0x33FFFFFF),
-        border: Border.all(color: const Color(0xAABBBBBB), width: 3),
-      ),
-      child: Center(child: child),
     );
   }
 }

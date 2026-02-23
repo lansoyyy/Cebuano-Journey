@@ -1,16 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'parallax_painter.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/models/level_data.dart';
+import '../../core/providers/player_provider.dart';
+import '../../data/level_generator.dart';
+import '../home/inventory_screen.dart';
 import '../home/options_screen.dart';
+import 'hud_overlay.dart';
+import 'parallax_painter.dart';
+import 'quiz_screen.dart';
 
-class GameScreen extends StatefulWidget {
-  const GameScreen({super.key});
+class GameScreen extends ConsumerStatefulWidget {
+  final int world;
+  final int level;
+  const GameScreen({super.key, this.world = 1, this.level = 1});
 
   @override
-  State<GameScreen> createState() => _GameScreenState();
+  ConsumerState<GameScreen> createState() => _GameScreenState();
 }
 
-class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
+class _GameScreenState extends ConsumerState<GameScreen>
+    with TickerProviderStateMixin {
   late final Ticker _ticker;
   Duration _last = Duration.zero;
 
@@ -24,8 +34,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
   // Jump physics
   bool _isJumping = false;
-  double _jumpY = 0.0; // px offset upward (negative = up)
-  double _jumpVY = 0.0; // velocity px/s
+  double _jumpY = 0.0;
+  double _jumpVY = 0.0;
 
   static const double _speed = 130.0;
   static const double _jumpImpulse = -300.0;
@@ -41,27 +51,51 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     'assets/images/Character/tile020.png',
     'assets/images/Character/tile021.png',
   ];
-  static const double _frameDuration = 0.10; // 10 fps walk
+  static const double _frameDuration = 0.10;
 
   int _walkFrame = 0;
   double _frameTimer = 0.0;
   bool _facingLeft = false;
 
+  // Level data
+  LevelData? _levelData;
+  bool _inQuiz = false;
+
+  // NPC proximity
+  LevelNPC? _nearNPC;
+
   @override
   void initState() {
     super.initState();
     _ticker = createTicker(_onTick)..start();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadLevel());
+  }
+
+  void _loadLevel() {
+    final size = MediaQuery.of(context).size;
+    final data = LevelGenerator.generate(
+      world: widget.world,
+      level: widget.level,
+      screenWidth: size.width,
+      groundY: size.height * 0.64,
+    );
+    setState(() => _levelData = data);
   }
 
   void _onTick(Duration elapsed) {
+    if (_inQuiz) return;
     final dt = _last == Duration.zero
         ? 0.0
         : (elapsed - _last).inMicroseconds / 1e6;
     _last = elapsed;
     setState(() {
       _cloudDrift += 18.0 * dt;
-      if (_movingLeft) _worldX -= _speed * dt;
-      if (_movingRight) _worldX += _speed * dt;
+      if (_movingLeft) {
+        _worldX = (_worldX - _speed * dt).clamp(0, double.infinity);
+      }
+      if (_movingRight) {
+        _worldX += _speed * dt;
+      }
 
       if (_isJumping) {
         _jumpVY += _gravity * dt;
@@ -73,7 +107,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         }
       }
 
-      // Sprite walk cycle
       if (_movingLeft || _movingRight) {
         if (_movingLeft) _facingLeft = true;
         if (_movingRight) _facingLeft = false;
@@ -86,7 +119,36 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         _walkFrame = 0;
         _frameTimer = 0;
       }
+
+      _checkTokens();
+      _checkNPCProximity();
     });
+  }
+
+  void _checkTokens() {
+    if (_levelData == null) return;
+    for (final token in _levelData!.tokens) {
+      if (token.collected) continue;
+      final screenX = token.worldX - _worldX;
+      if (screenX.abs() < 60) {
+        token.collected = true;
+        ref.read(playerProvider.notifier).collectWord(token.word.id);
+      }
+    }
+  }
+
+  void _checkNPCProximity() {
+    if (_levelData == null) return;
+    _nearNPC = null;
+    for (final npc in _levelData!.npcs) {
+      if (npc.completed) continue;
+      final screenX = npc.worldX - _worldX;
+      final charScreenX = MediaQuery.of(context).size.width * 0.27;
+      if ((screenX - charScreenX).abs() < 90) {
+        _nearNPC = npc;
+        break;
+      }
+    }
   }
 
   void _jump() {
@@ -94,6 +156,48 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       _isJumping = true;
       _jumpVY = _jumpImpulse;
     }
+  }
+
+  Future<void> _interact() async {
+    if (_nearNPC == null || _inQuiz) return;
+    final npc = _nearNPC!;
+    _ticker.stop();
+    setState(() => _inQuiz = true);
+    final result = await Navigator.push<QuizResult>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => QuizScreen(
+          npcName: npc.name,
+          npcGreeting: npc.greeting,
+          questions: npc.questions,
+        ),
+      ),
+    );
+    npc.completed = true;
+    _last = Duration.zero;
+    _ticker.start();
+    setState(() => _inQuiz = false);
+    if (result != null && mounted) {
+      _showQuizSummary(result);
+    }
+  }
+
+  void _showQuizSummary(QuizResult result) {
+    final msg = result.passed
+        ? 'Maayo! +${result.xpEarned} XP'
+        : 'Try harder next time!';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          msg,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+        backgroundColor: result.passed
+            ? const Color(0xFF1A4A1A)
+            : const Color(0xFF4A1A1A),
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 
   @override
@@ -112,16 +216,59 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     final charTop = groundY - charH + _jumpY;
     final btnSize = size.height * 0.185;
     final btnGap = size.width * 0.022;
+    final player = ref.watch(playerProvider);
+
+    final tokensCollected =
+        _levelData?.tokens.where((t) => t.collected).length ?? 0;
+    final tokensTotal = _levelData?.tokens.length ?? 0;
 
     return Scaffold(
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // ── Animated parallax background ────────────────────────────────
+          // ── Parallax background ──────────────────────────────────────────
           CustomPaint(
             painter: ParallaxPainter(worldX: _worldX, cloudDrift: _cloudDrift),
             child: const SizedBox.expand(),
           ),
+
+          // ── Platforms ────────────────────────────────────────────────────
+          if (_levelData != null)
+            CustomPaint(
+              painter: _PlatformPainter(
+                platforms: _levelData!.platforms,
+                worldX: _worldX,
+              ),
+              child: const SizedBox.expand(),
+            ),
+
+          // ── Tokens ───────────────────────────────────────────────────────
+          if (_levelData != null)
+            ..._levelData!.tokens.where((t) => !t.collected).map((t) {
+              final sx = t.worldX - _worldX;
+              if (sx < -40 || sx > size.width + 40) return const SizedBox();
+              return Positioned(
+                left: sx - 14,
+                top: t.screenY,
+                child: const _TokenWidget(),
+              );
+            }),
+
+          // ── NPCs ─────────────────────────────────────────────────────────
+          if (_levelData != null)
+            ..._levelData!.npcs.map((npc) {
+              final sx = npc.worldX - _worldX;
+              if (sx < -60 || sx > size.width + 60) return const SizedBox();
+              return Positioned(
+                left: sx - 16,
+                top: groundY - size.height * 0.18,
+                child: _NPCWidget(
+                  name: npc.name,
+                  completed: npc.completed,
+                  size: size,
+                ),
+              );
+            }),
 
           // ── Character sprite ─────────────────────────────────────────────
           Positioned(
@@ -143,7 +290,22 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             ),
           ),
 
-          // ── Controls bottom bar (semi-transparent) ───────────────────────
+          // ── HUD overlay ──────────────────────────────────────────────────
+          HudOverlay(
+            player: player,
+            tokensCollected: tokensCollected,
+            tokensTotal: tokensTotal,
+            world: widget.world,
+            level: widget.level,
+            themeLabel: _levelData?.themeLabel ?? '',
+            showInteract: _nearNPC != null,
+            onInventory: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const InventoryScreen()),
+            ),
+          ),
+
+          // ── Controls bottom bar ──────────────────────────────────────────
           Positioned(
             bottom: 0,
             left: 0,
@@ -154,7 +316,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             ),
           ),
 
-          // ── D-pad (bottom-left) ──────────────────────────────────────────
+          // ── D-pad ────────────────────────────────────────────────────────
           Positioned(
             bottom: size.height * 0.045,
             left: size.width * 0.025,
@@ -185,7 +347,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             ),
           ),
 
-          // ── A / B buttons (bottom-right) ─────────────────────────────────
+          // ── A / B buttons ────────────────────────────────────────────────
           Positioned(
             bottom: size.height * 0.045,
             right: size.width * 0.025,
@@ -195,7 +357,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                   label: 'A',
                   color: Colors.green,
                   size: btnSize,
-                  onTap: () {},
+                  onTap: _interact,
                 ),
                 SizedBox(width: btnGap),
                 _LabelBtn(
@@ -208,17 +370,23 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             ),
           ),
 
-          // ── Pause button (top-right) ──────────────────────────────────────
+          // ── Pause button ─────────────────────────────────────────────────
           Positioned(
-            top: size.height * 0.04,
+            top: size.height * 0.115,
             right: size.width * 0.025,
             child: GestureDetector(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const OptionsScreen(isInGame: true),
-                ),
-              ),
+              onTap: () {
+                _ticker.stop();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const OptionsScreen(isInGame: true),
+                  ),
+                ).then((_) {
+                  _last = Duration.zero;
+                  _ticker.start();
+                });
+              },
               child: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
@@ -229,7 +397,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                 child: Icon(
                   Icons.pause,
                   color: Colors.white,
-                  size: size.height * 0.055,
+                  size: size.height * 0.05,
                 ),
               ),
             ),
@@ -238,6 +406,141 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       ),
     );
   }
+}
+
+// ── Platform painter ──────────────────────────────────────────────────────────
+class _PlatformPainter extends CustomPainter {
+  final List<LevelPlatform> platforms;
+  final double worldX;
+  const _PlatformPainter({required this.platforms, required this.worldX});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final grassP = Paint()..color = const Color(0xFF4CAF50);
+    final dirtP = Paint()..color = const Color(0xFF7A4E2D);
+    for (final p in platforms) {
+      final sx = p.worldX - worldX;
+      if (sx > size.width + p.width || sx < -p.width) continue;
+      canvas.drawRect(Rect.fromLTWH(sx, p.screenY - 6, p.width, 6), grassP);
+      canvas.drawRect(Rect.fromLTWH(sx, p.screenY, p.width, 14), dirtP);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_PlatformPainter old) =>
+      old.worldX != worldX || old.platforms != platforms;
+}
+
+// ── Token widget ──────────────────────────────────────────────────────────────
+class _TokenWidget extends StatelessWidget {
+  const _TokenWidget();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 28,
+      height: 28,
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        color: Color(0xFFFFD700),
+        boxShadow: [BoxShadow(color: Color(0x88FFD700), blurRadius: 8)],
+      ),
+      child: const Icon(Icons.stars_rounded, color: Colors.white, size: 18),
+    );
+  }
+}
+
+// ── NPC widget ────────────────────────────────────────────────────────────────
+class _NPCWidget extends StatelessWidget {
+  final String name;
+  final bool completed;
+  final Size size;
+  const _NPCWidget({
+    required this.name,
+    required this.completed,
+    required this.size,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          name,
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: size.height * 0.022,
+            shadows: const [Shadow(color: Colors.black, blurRadius: 4)],
+          ),
+        ),
+        const SizedBox(height: 2),
+        CustomPaint(
+          size: Size(size.height * 0.14, size.height * 0.18),
+          painter: _PixelNPCPainter(completed: completed),
+        ),
+      ],
+    );
+  }
+}
+
+class _PixelNPCPainter extends CustomPainter {
+  final bool completed;
+  const _PixelNPCPainter({required this.completed});
+
+  @override
+  void paint(Canvas canvas, Size s) {
+    final bodyColor = completed
+        ? const Color(0xFF4CAF50)
+        : const Color(0xFF2196F3);
+    final skin = Paint()..color = const Color(0xFFD4956A);
+    final body = Paint()..color = bodyColor;
+    final pants = Paint()..color = const Color(0xFF333366);
+    final hair = Paint()..color = const Color(0xFF3B1F0A);
+    canvas.drawRect(
+      Rect.fromLTWH(s.width * 0.2, 0, s.width * 0.6, s.height * 0.18),
+      hair,
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(
+        s.width * 0.15,
+        s.height * 0.08,
+        s.width * 0.7,
+        s.height * 0.22,
+      ),
+      skin,
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(
+        s.width * 0.18,
+        s.height * 0.30,
+        s.width * 0.64,
+        s.height * 0.32,
+      ),
+      body,
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(
+        s.width * 0.15,
+        s.height * 0.62,
+        s.width * 0.28,
+        s.height * 0.38,
+      ),
+      pants,
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(
+        s.width * 0.55,
+        s.height * 0.62,
+        s.width * 0.28,
+        s.height * 0.38,
+      ),
+      pants,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_PixelNPCPainter old) => old.completed != completed;
 }
 
 // ── Circle button (D-pad) ─────────────────────────────────────────────────────
