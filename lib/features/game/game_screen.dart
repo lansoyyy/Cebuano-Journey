@@ -5,8 +5,10 @@ import '../../core/models/level_data.dart';
 import '../../core/providers/player_provider.dart';
 import '../../data/level_generator.dart';
 import '../home/inventory_screen.dart';
+import '../home/main_menu_screen.dart';
 import '../home/options_screen.dart';
 import 'hud_overlay.dart';
+import 'level_end_screens.dart';
 import 'parallax_painter.dart';
 import 'quiz_screen.dart';
 
@@ -64,6 +66,10 @@ class _GameScreenState extends ConsumerState<GameScreen>
   // NPC proximity
   LevelNPC? _nearNPC;
 
+  // Game session stats
+  int _xpEarnedThisLevel = 0;
+  bool _levelCompleteHandled = false;
+
   @override
   void initState() {
     super.initState();
@@ -83,7 +89,16 @@ class _GameScreenState extends ConsumerState<GameScreen>
   }
 
   void _onTick(Duration elapsed) {
-    if (_inQuiz) return;
+    if (_inQuiz || _levelCompleteHandled) return;
+
+    // Check hearts
+    final player = ref.read(playerProvider);
+    if (player.currentHearts <= 0) {
+      _ticker.stop();
+      _showGameOver();
+      return;
+    }
+
     final dt = _last == Duration.zero
         ? 0.0
         : (elapsed - _last).inMicroseconds / 1e6;
@@ -94,7 +109,10 @@ class _GameScreenState extends ConsumerState<GameScreen>
         _worldX = (_worldX - _speed * dt).clamp(0, double.infinity);
       }
       if (_movingRight) {
-        _worldX += _speed * dt;
+        _worldX = (_worldX + _speed * dt).clamp(
+          0,
+          _levelData?.worldLength ?? double.infinity,
+        );
       }
 
       if (_isJumping) {
@@ -121,7 +139,9 @@ class _GameScreenState extends ConsumerState<GameScreen>
       }
 
       _checkTokens();
+      _checkHints();
       _checkNPCProximity();
+      _checkLevelComplete();
     });
   }
 
@@ -130,9 +150,46 @@ class _GameScreenState extends ConsumerState<GameScreen>
     for (final token in _levelData!.tokens) {
       if (token.collected) continue;
       final screenX = token.worldX - _worldX;
-      if (screenX.abs() < 60) {
+      // Also need to check vertical distance for collecting
+      final charScreenX = MediaQuery.of(context).size.width * 0.27;
+      final charY =
+          MediaQuery.of(context).size.height * 0.64 -
+          MediaQuery.of(context).size.height * 0.20 +
+          _jumpY;
+
+      if ((screenX - charScreenX).abs() < 60 &&
+          (token.screenY - charY).abs() < 60) {
         token.collected = true;
         ref.read(playerProvider.notifier).collectWord(token.word.id);
+      }
+    }
+  }
+
+  void _checkHints() {
+    if (_levelData == null) return;
+    for (final hint in _levelData!.hints) {
+      if (hint.collected) continue;
+      final screenX = hint.worldX - _worldX;
+      final charScreenX = MediaQuery.of(context).size.width * 0.27;
+      final charY =
+          MediaQuery.of(context).size.height * 0.64 -
+          MediaQuery.of(context).size.height * 0.20 +
+          _jumpY;
+
+      if ((screenX - charScreenX).abs() < 50 &&
+          (hint.screenY - charY).abs() < 50) {
+        hint.collected = true;
+        ref.read(playerProvider.notifier).addHint();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Picked up a Hint Powerup! 💡',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            backgroundColor: Color(0xFF2A4A2A),
+            duration: Duration(seconds: 2),
+          ),
+        );
       }
     }
   }
@@ -149,6 +206,85 @@ class _GameScreenState extends ConsumerState<GameScreen>
         break;
       }
     }
+  }
+
+  void _checkLevelComplete() {
+    if (_levelData == null || _levelCompleteHandled) return;
+
+    // Win condition: Reached the end of the world OR all NPCs are completed
+    final allNpcsDone = _levelData!.npcs.every((n) => n.completed);
+    final reachedEnd = _worldX >= _levelData!.worldLength - 100;
+
+    if (allNpcsDone || reachedEnd) {
+      _levelCompleteHandled = true;
+      _ticker.stop();
+      _showLevelComplete();
+    }
+  }
+
+  void _showGameOver() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => GameOverScreen(
+          onMenu: () => Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const MainMenuScreen()),
+          ),
+          onRetry: () {
+            // Re-check hearts, if recovered, restart this level
+            if (ref.read(playerProvider).currentHearts > 0) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      GameScreen(world: widget.world, level: widget.level),
+                ),
+              );
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Still out of hearts! Wait a bit.'),
+                ),
+              );
+            }
+          },
+        ),
+      ),
+    );
+  }
+
+  void _showLevelComplete() {
+    final tokensCollected = _levelData!.tokens.where((t) => t.collected).length;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LevelCompleteScreen(
+          world: widget.world,
+          level: widget.level,
+          xpEarned: _xpEarnedThisLevel,
+          tokensCollected: tokensCollected,
+          onMenu: () => Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const MainMenuScreen()),
+          ),
+          onNext: () {
+            int nw = widget.world;
+            int nl = widget.level + 1;
+            if (nl > 5) {
+              nl = 1;
+              nw++;
+            }
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => GameScreen(world: nw, level: nl),
+              ),
+            );
+          },
+        ),
+      ),
+    );
   }
 
   void _jump() {
@@ -183,6 +319,10 @@ class _GameScreenState extends ConsumerState<GameScreen>
   }
 
   void _showQuizSummary(QuizResult result) {
+    if (result.passed) {
+      _xpEarnedThisLevel += result.xpEarned;
+    }
+
     final msg = result.passed
         ? 'Maayo! +${result.xpEarned} XP'
         : 'Try harder next time!';
@@ -251,6 +391,18 @@ class _GameScreenState extends ConsumerState<GameScreen>
                 left: sx - 14,
                 top: t.screenY,
                 child: const _TokenWidget(),
+              );
+            }),
+
+          // ── Hints ────────────────────────────────────────────────────────
+          if (_levelData != null)
+            ..._levelData!.hints.where((h) => !h.collected).map((h) {
+              final sx = h.worldX - _worldX;
+              if (sx < -40 || sx > size.width + 40) return const SizedBox();
+              return Positioned(
+                left: sx - 14,
+                top: h.screenY,
+                child: const _HintWidget(),
               );
             }),
 
@@ -446,6 +598,25 @@ class _TokenWidget extends StatelessWidget {
         boxShadow: [BoxShadow(color: Color(0x88FFD700), blurRadius: 8)],
       ),
       child: const Icon(Icons.stars_rounded, color: Colors.white, size: 18),
+    );
+  }
+}
+
+// ── Hint widget ───────────────────────────────────────────────────────────────
+class _HintWidget extends StatelessWidget {
+  const _HintWidget();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 28,
+      height: 28,
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        color: Color(0xFF4CAF50),
+        boxShadow: [BoxShadow(color: Color(0x884CAF50), blurRadius: 8)],
+      ),
+      child: const Icon(Icons.lightbulb, color: Colors.white, size: 18),
     );
   }
 }

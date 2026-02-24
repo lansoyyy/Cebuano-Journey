@@ -45,6 +45,18 @@ class LevelNPC {
 
 enum WorldTheme { market, festival, city, nature }
 
+class LevelHint {
+  final double worldX;
+  final double screenY;
+  bool collected;
+
+  LevelHint({
+    required this.worldX,
+    required this.screenY,
+    this.collected = false,
+  });
+}
+
 class LevelData {
   final int world;
   final int level;
@@ -53,6 +65,7 @@ class LevelData {
   final List<LevelPlatform> platforms;
   final List<LevelToken> tokens;
   final List<LevelNPC> npcs;
+  final List<LevelHint> hints;
 
   const LevelData({
     required this.world,
@@ -62,6 +75,7 @@ class LevelData {
     required this.platforms,
     required this.tokens,
     required this.npcs,
+    this.hints = const [],
   });
 
   String get themeLabel {

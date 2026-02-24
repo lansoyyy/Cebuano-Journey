@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'options_screen.dart';
-import '../game/game_screen.dart';
+import 'level_select_screen.dart';
 import 'game_background_painter.dart';
 
 class MainMenuScreen extends StatelessWidget {
@@ -78,7 +78,9 @@ class _MenuPanel extends StatelessWidget {
                   width: btnW,
                   onTap: () => Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const GameScreen()),
+                    MaterialPageRoute(
+                      builder: (_) => const LevelSelectScreen(),
+                    ),
                   ),
                 ),
                 SizedBox(height: size.height * 0.008),

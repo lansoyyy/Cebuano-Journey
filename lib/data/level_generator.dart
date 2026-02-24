@@ -33,17 +33,23 @@ class LevelGenerator {
     }
 
     // ── Tokens (one per word, placed near platforms) ─────────────────────────
-    final tokenWords = _pickRandom(levelWords, min(levelWords.length, 8 + difficulty), rng);
+    final tokenWords = _pickRandom(
+      levelWords,
+      min(levelWords.length, 8 + difficulty),
+      rng,
+    );
     final tokens = <LevelToken>[];
     for (int i = 0; i < tokenWords.length; i++) {
       final plat = i < platforms.length
           ? platforms[i]
           : platforms[rng.nextInt(platforms.length)];
-      tokens.add(LevelToken(
-        worldX: plat.worldX + plat.width / 2,
-        screenY: plat.screenY - 28,
-        word: tokenWords[i],
-      ));
+      tokens.add(
+        LevelToken(
+          worldX: plat.worldX + plat.width / 2,
+          screenY: plat.screenY - 28,
+          word: tokenWords[i],
+        ),
+      );
     }
 
     // ── NPCs (3 per level at intervals) ─────────────────────────────────────
@@ -58,12 +64,26 @@ class LevelGenerator {
     for (int i = 0; i < npcCount; i++) {
       final npcX = worldLength * ((i + 1) / (npcCount + 1));
       final quizWords = _pickRandom(tokenWords, min(4, tokenWords.length), rng);
-      npcs.add(LevelNPC(
-        worldX: npcX,
-        name: npcNames[i % npcNames.length],
-        greeting: npcGreetings[i % npcGreetings.length],
-        questions: _buildQuestions(quizWords, levelWords, rng),
-      ));
+      npcs.add(
+        LevelNPC(
+          worldX: npcX,
+          name: npcNames[i % npcNames.length],
+          greeting: npcGreetings[i % npcGreetings.length],
+          questions: _buildQuestions(quizWords, levelWords, rng),
+        ),
+      );
+    }
+
+    // ── Hints (1-2 per level on hard to reach platforms) ────────────────────
+    final hints = <LevelHint>[];
+    if (rng.nextBool() || difficulty > 5) {
+      final plat = platforms[rng.nextInt(platforms.length)];
+      hints.add(
+        LevelHint(
+          worldX: plat.worldX + plat.width / 2,
+          screenY: plat.screenY - 60, // Higher up
+        ),
+      );
     }
 
     return LevelData(
@@ -74,11 +94,15 @@ class LevelGenerator {
       platforms: platforms,
       tokens: tokens,
       npcs: npcs,
+      hints: hints,
     );
   }
 
   static List<QuizQuestion> _buildQuestions(
-      List<WordToken> quizWords, List<WordToken> allWords, Random rng) {
+    List<WordToken> quizWords,
+    List<WordToken> allWords,
+    Random rng,
+  ) {
     final questions = <QuizQuestion>[];
     final types = QuizType.values;
     for (int i = 0; i < quizWords.length; i++) {
@@ -90,15 +114,19 @@ class LevelGenerator {
   }
 
   static QuizQuestion _makeQuestion(
-      QuizType type, WordToken word, List<WordToken> allWords, Random rng) {
+    QuizType type,
+    WordToken word,
+    List<WordToken> allWords,
+    Random rng,
+  ) {
     switch (type) {
       case QuizType.multipleChoice:
-        final distractors = allWords
-            .where((w) => w.id != word.id)
-            .toList()
+        final distractors = allWords.where((w) => w.id != word.id).toList()
           ..shuffle(rng);
-        final opts = [word.english, ...distractors.take(3).map((w) => w.english)]
-          ..shuffle(rng);
+        final opts = [
+          word.english,
+          ...distractors.take(3).map((w) => w.english),
+        ]..shuffle(rng);
         return QuizQuestion(
           type: QuizType.multipleChoice,
           prompt: 'What does "${word.cebuano}" mean?',
@@ -123,7 +151,8 @@ class LevelGenerator {
         final letters = word.cebuano.toUpperCase().split('')..shuffle(rng);
         return QuizQuestion(
           type: QuizType.wordJumble,
-          prompt: 'Arrange the letters to form the Cebuano word for "${word.english}":',
+          prompt:
+              'Arrange the letters to form the Cebuano word for "${word.english}":',
           correctAnswer: word.cebuano.toUpperCase(),
           options: letters,
           cebuano: word.cebuano,
