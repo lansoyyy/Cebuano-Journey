@@ -412,11 +412,13 @@ class _GameScreenState extends ConsumerState<GameScreen>
               final sx = npc.worldX - _worldX;
               if (sx < -60 || sx > size.width + 60) return const SizedBox();
               return Positioned(
-                left: sx - 16,
-                top: groundY - size.height * 0.18,
+                left: sx - size.height * 0.09,
+                top: groundY - size.height * 0.22,
                 child: _NPCWidget(
                   name: npc.name,
+                  npcId: npc.npcId,
                   completed: npc.completed,
+                  isNear: _nearNPC == npc,
                   size: size,
                 ),
               );
@@ -621,97 +623,185 @@ class _HintWidget extends StatelessWidget {
   }
 }
 
-// ── NPC widget ────────────────────────────────────────────────────────────────
-class _NPCWidget extends StatelessWidget {
+// ── NPC animated sprite widget ────────────────────────────────────────────────
+//
+// npc1-4  → tile pattern: tile000-003.png (4 frames)
+// npc5-16 → Idle000-003.png (idle), Special000-005.png (talking, if present)
+//
+// _kNpcMeta[npcId] = (isTile, idleCount, specialCount)
+//   isTile       : true  → use tile000-N frames
+//   idleCount    : number of Idle frames (or tile frames for tile NPCs)
+//   specialCount : number of Special frames (0 = no special → fall back to idle)
+//
+const _kNpcMeta = <int, (bool, int, int)>{
+  1: (true, 4, 0),
+  2: (true, 4, 0),
+  3: (true, 4, 0),
+  4: (true, 4, 0),
+  5: (false, 6, 6),
+  6: (false, 4, 4),
+  7: (false, 4, 6),
+  8: (false, 4, 4),
+  9: (false, 4, 0),
+  10: (false, 4, 6),
+  11: (false, 4, 6),
+  12: (false, 4, 4),
+  13: (false, 4, 0),
+  14: (false, 4, 6),
+  15: (false, 4, 0),
+  16: (false, 4, 0),
+};
+
+class _NPCWidget extends StatefulWidget {
   final String name;
+  final int npcId;
   final bool completed;
+  final bool isNear;
   final Size size;
+
   const _NPCWidget({
     required this.name,
+    required this.npcId,
     required this.completed,
+    required this.isNear,
     required this.size,
   });
 
   @override
+  State<_NPCWidget> createState() => _NPCWidgetState();
+}
+
+class _NPCWidgetState extends State<_NPCWidget>
+    with SingleTickerProviderStateMixin {
+  late final Ticker _ticker;
+  int _frame = 0;
+  double _frameTimer = 0;
+  static const double _fps = 1 / 8; // 8 fps
+
+  @override
+  void initState() {
+    super.initState();
+    Duration last = Duration.zero;
+    _ticker = createTicker((elapsed) {
+      final dt = last == Duration.zero
+          ? 0.0
+          : (elapsed - last).inMicroseconds / 1e6;
+      last = elapsed;
+      _frameTimer += dt;
+      final meta = _kNpcMeta[widget.npcId]!;
+      final useSpecial = widget.isNear && meta.$3 > 0;
+      final frameCount = useSpecial ? meta.$3 : meta.$2;
+      if (_frameTimer >= _fps) {
+        _frameTimer -= _fps;
+        setState(() => _frame = (_frame + 1) % frameCount);
+      }
+    })..start();
+  }
+
+  @override
+  void dispose() {
+    _ticker.dispose();
+    super.dispose();
+  }
+
+  String _framePath() {
+    final id = widget.npcId;
+    final meta = _kNpcMeta[id]!;
+    final useSpecial = widget.isNear && meta.$3 > 0;
+
+    if (meta.$1) {
+      // tile pattern
+      return 'assets/images/NPC/npc$id/tile${_frame.toString().padLeft(3, '0')}.png';
+    }
+    final frameCount = useSpecial ? meta.$3 : meta.$2;
+    final f = _frame % frameCount;
+    final prefix = useSpecial ? 'Special' : 'Idle';
+    return 'assets/images/NPC/npc$id/$prefix${f.toString().padLeft(3, '0')}.png';
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final spriteH = widget.size.height * 0.18;
+    final spriteW = spriteH;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          name,
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: size.height * 0.022,
-            shadows: const [Shadow(color: Colors.black, blurRadius: 4)],
+        // Name label
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+          decoration: BoxDecoration(
+            color: widget.completed
+                ? const Color(0xCC1A4A1A)
+                : const Color(0xCC1A1A3A),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(
+            widget.name,
+            style: TextStyle(
+              color: widget.completed ? const Color(0xFF80FF80) : Colors.white,
+              fontSize: widget.size.height * 0.022,
+              fontWeight: FontWeight.bold,
+              shadows: const [Shadow(color: Colors.black, blurRadius: 4)],
+            ),
           ),
         ),
         const SizedBox(height: 2),
-        CustomPaint(
-          size: Size(size.height * 0.14, size.height * 0.18),
-          painter: _PixelNPCPainter(completed: completed),
+        // Sprite frame
+        Stack(
+          alignment: Alignment.center,
+          children: [
+            Image.asset(
+              _framePath(),
+              width: spriteW,
+              height: spriteH,
+              filterQuality: FilterQuality.none,
+              fit: BoxFit.contain,
+            ),
+            // Green checkmark overlay when completed
+            if (widget.completed)
+              Positioned(
+                top: 0,
+                right: 0,
+                child: Container(
+                  width: spriteW * 0.36,
+                  height: spriteW * 0.36,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF4CAF50),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.check, color: Colors.white, size: 12),
+                ),
+              ),
+            // Pulsing "!" when near and not completed
+            if (widget.isNear && !widget.completed)
+              Positioned(
+                top: 0,
+                right: 0,
+                child: Container(
+                  width: spriteW * 0.36,
+                  height: spriteW * 0.36,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFFFD700),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Center(
+                    child: Text(
+                      '!',
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
       ],
     );
   }
-}
-
-class _PixelNPCPainter extends CustomPainter {
-  final bool completed;
-  const _PixelNPCPainter({required this.completed});
-
-  @override
-  void paint(Canvas canvas, Size s) {
-    final bodyColor = completed
-        ? const Color(0xFF4CAF50)
-        : const Color(0xFF2196F3);
-    final skin = Paint()..color = const Color(0xFFD4956A);
-    final body = Paint()..color = bodyColor;
-    final pants = Paint()..color = const Color(0xFF333366);
-    final hair = Paint()..color = const Color(0xFF3B1F0A);
-    canvas.drawRect(
-      Rect.fromLTWH(s.width * 0.2, 0, s.width * 0.6, s.height * 0.18),
-      hair,
-    );
-    canvas.drawRect(
-      Rect.fromLTWH(
-        s.width * 0.15,
-        s.height * 0.08,
-        s.width * 0.7,
-        s.height * 0.22,
-      ),
-      skin,
-    );
-    canvas.drawRect(
-      Rect.fromLTWH(
-        s.width * 0.18,
-        s.height * 0.30,
-        s.width * 0.64,
-        s.height * 0.32,
-      ),
-      body,
-    );
-    canvas.drawRect(
-      Rect.fromLTWH(
-        s.width * 0.15,
-        s.height * 0.62,
-        s.width * 0.28,
-        s.height * 0.38,
-      ),
-      pants,
-    );
-    canvas.drawRect(
-      Rect.fromLTWH(
-        s.width * 0.55,
-        s.height * 0.62,
-        s.width * 0.28,
-        s.height * 0.38,
-      ),
-      pants,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_PixelNPCPainter old) => old.completed != completed;
 }
 
 // ── Circle button (D-pad) ─────────────────────────────────────────────────────

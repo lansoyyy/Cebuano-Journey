@@ -61,6 +61,8 @@ class LevelGenerator {
       'Hoy! Makigsulti ta. Tubaga ang akong pangutana.',
       'Halika! Sulayan nato ang imong nahibaloan.',
     ];
+    // Deterministic NPC sprite ID based on world+level+index, cycling 1-16
+    final npcIdBase = ((world - 1) * 5 + (level - 1)) * npcCount;
     for (int i = 0; i < npcCount; i++) {
       final npcX = worldLength * ((i + 1) / (npcCount + 1));
       final quizWords = _pickRandom(tokenWords, min(4, tokenWords.length), rng);
@@ -70,6 +72,7 @@ class LevelGenerator {
           name: npcNames[i % npcNames.length],
           greeting: npcGreetings[i % npcGreetings.length],
           questions: _buildQuestions(quizWords, levelWords, rng),
+          npcId: (npcIdBase + i) % 16 + 1,
         ),
       );
     }

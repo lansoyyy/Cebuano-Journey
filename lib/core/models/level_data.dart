@@ -32,6 +32,7 @@ class LevelNPC {
   final String name;
   final String greeting;
   final List<QuizQuestion> questions;
+  final int npcId;
   bool completed;
 
   LevelNPC({
@@ -39,6 +40,7 @@ class LevelNPC {
     required this.name,
     required this.greeting,
     required this.questions,
+    required this.npcId,
     this.completed = false,
   });
 }

@@ -81,6 +81,23 @@ flutter:
     - assets/
     - assets/images/
     - assets/images/Character/
+    - assets/images/NPC/
+    - assets/images/NPC/npc1/
+    - assets/images/NPC/npc2/
+    - assets/images/NPC/npc3/
+    - assets/images/NPC/npc4/
+    - assets/images/NPC/npc5/
+    - assets/images/NPC/npc6/
+    - assets/images/NPC/npc7/
+    - assets/images/NPC/npc8/
+    - assets/images/NPC/npc9/
+    - assets/images/NPC/npc10/
+    - assets/images/NPC/npc11/
+    - assets/images/NPC/npc12/
+    - assets/images/NPC/npc13/
+    - assets/images/NPC/npc14/
+    - assets/images/NPC/npc15/
+    - assets/images/NPC/npc16/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
