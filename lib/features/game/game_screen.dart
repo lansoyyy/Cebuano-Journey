@@ -25,6 +25,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
     with TickerProviderStateMixin {
   late final Ticker _ticker;
   Duration _last = Duration.zero;
+  double _gameTime = 0.0; // Track total game time for moving platforms
 
   // World & parallax
   double _worldX = 0.0;
@@ -33,15 +34,31 @@ class _GameScreenState extends ConsumerState<GameScreen>
   // Movement
   bool _movingLeft = false;
   bool _movingRight = false;
+  bool _isCrouching = false;
 
   // Jump physics
   bool _isJumping = false;
+  int _jumpCount = 0;
+  static const int _maxJumps = 2; // Double jump
   double _jumpY = 0.0;
   double _jumpVY = 0.0;
 
+  // Dash physics
+  bool _isDashing = false;
+  double _dashCooldown = 0.0;
+  static const double _dashDuration = 0.15;
+  static const double _dashCooldownTime = 1.0;
+  static const double _dashSpeed = 400.0;
+
   static const double _speed = 130.0;
+  static const double _sprintSpeed = 200.0;
   static const double _jumpImpulse = -300.0;
   static const double _gravity = 600.0;
+
+  // Crouch physics
+  static const double _crouchSpeed = 65.0; // Half speed when crouching
+  static const double _crouchHeightMultiplier =
+      0.6; // Character is 60% height when crouching
 
   // Sprite animation
   static const _idleFrame = 'assets/images/Character/tile012.png';
@@ -103,18 +120,40 @@ class _GameScreenState extends ConsumerState<GameScreen>
         ? 0.0
         : (elapsed - _last).inMicroseconds / 1e6;
     _last = elapsed;
+    _gameTime += dt; // Track game time for moving platforms
     setState(() {
       _cloudDrift += 18.0 * dt;
+
+      // Update dash cooldown
+      if (_dashCooldown > 0) {
+        _dashCooldown -= dt;
+      }
+
+      // Handle dash
+      if (_isDashing) {
+        _dashCooldown = _dashCooldownTime;
+        // Dash ends after duration
+        if (_dashCooldown >= _dashCooldownTime - _dashDuration) {
+          _isDashing = false;
+        }
+      }
+
+      // Apply movement speed (sprint when dashing, crouch when crouching)
+      final currentSpeed = _isDashing
+          ? _dashSpeed
+          : (_isCrouching ? _crouchSpeed : _speed);
+
       if (_movingLeft) {
-        _worldX = (_worldX - _speed * dt).clamp(0, double.infinity);
+        _worldX = (_worldX - currentSpeed * dt).clamp(0, double.infinity);
       }
       if (_movingRight) {
-        _worldX = (_worldX + _speed * dt).clamp(
+        _worldX = (_worldX + currentSpeed * dt).clamp(
           0,
           _levelData?.worldLength ?? double.infinity,
         );
       }
 
+      // Jump physics with double jump
       if (_isJumping) {
         _jumpVY += _gravity * dt;
         _jumpY += _jumpVY * dt;
@@ -122,9 +161,11 @@ class _GameScreenState extends ConsumerState<GameScreen>
           _jumpY = 0;
           _jumpVY = 0;
           _isJumping = false;
+          _jumpCount = 0; // Reset jump count when landing
         }
       }
 
+      // Animation and facing
       if (_movingLeft || _movingRight) {
         if (_movingLeft) _facingLeft = true;
         if (_movingRight) _facingLeft = false;
@@ -147,15 +188,17 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
   void _checkTokens() {
     if (_levelData == null) return;
+    final size = MediaQuery.of(context).size;
+    final groundY = size.height * 0.64;
+    final charH =
+        size.height * 0.20 * (_isCrouching ? _crouchHeightMultiplier : 1.0);
+
     for (final token in _levelData!.tokens) {
       if (token.collected) continue;
       final screenX = token.worldX - _worldX;
       // Also need to check vertical distance for collecting
-      final charScreenX = MediaQuery.of(context).size.width * 0.27;
-      final charY =
-          MediaQuery.of(context).size.height * 0.64 -
-          MediaQuery.of(context).size.height * 0.20 +
-          _jumpY;
+      final charScreenX = size.width * 0.27;
+      final charY = groundY - charH + _jumpY;
 
       if ((screenX - charScreenX).abs() < 60 &&
           (token.screenY - charY).abs() < 60) {
@@ -167,14 +210,16 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
   void _checkHints() {
     if (_levelData == null) return;
+    final size = MediaQuery.of(context).size;
+    final groundY = size.height * 0.64;
+    final charH =
+        size.height * 0.20 * (_isCrouching ? _crouchHeightMultiplier : 1.0);
+
     for (final hint in _levelData!.hints) {
       if (hint.collected) continue;
       final screenX = hint.worldX - _worldX;
-      final charScreenX = MediaQuery.of(context).size.width * 0.27;
-      final charY =
-          MediaQuery.of(context).size.height * 0.64 -
-          MediaQuery.of(context).size.height * 0.20 +
-          _jumpY;
+      final charScreenX = size.width * 0.27;
+      final charY = groundY - charH + _jumpY;
 
       if ((screenX - charScreenX).abs() < 50 &&
           (hint.screenY - charY).abs() < 50) {
@@ -196,12 +241,20 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
   void _checkNPCProximity() {
     if (_levelData == null) return;
+    final size = MediaQuery.of(context).size;
+    final groundY = size.height * 0.64;
+    final charH =
+        size.height * 0.20 * (_isCrouching ? _crouchHeightMultiplier : 1.0);
+    final charY = groundY - charH + _jumpY;
+
     _nearNPC = null;
     for (final npc in _levelData!.npcs) {
       if (npc.completed) continue;
       final screenX = npc.worldX - _worldX;
-      final charScreenX = MediaQuery.of(context).size.width * 0.27;
-      if ((screenX - charScreenX).abs() < 90) {
+      final charScreenX = size.width * 0.27;
+      final npcY = groundY - size.height * 0.22;
+
+      if ((screenX - charScreenX).abs() < 90 && (npcY - charY).abs() < 90) {
         _nearNPC = npc;
         break;
       }
@@ -288,9 +341,28 @@ class _GameScreenState extends ConsumerState<GameScreen>
   }
 
   void _jump() {
-    if (!_isJumping) {
+    // Allow jump if not jumping OR if we have jumps left (double jump)
+    if (!_isJumping || (_jumpCount < _maxJumps - 1)) {
       _isJumping = true;
       _jumpVY = _jumpImpulse;
+      _jumpCount++;
+      // Reset jump Y slightly for double jump to feel responsive
+      if (_jumpCount > 1) {
+        _jumpY = -10.0;
+      }
+    }
+  }
+
+  void _dash() {
+    if (_dashCooldown <= 0 && !_isDashing && !_isCrouching) {
+      _isDashing = true;
+      _dashCooldown = _dashCooldownTime;
+    }
+  }
+
+  void _crouch(bool isDown) {
+    if (!_isJumping) {
+      setState(() => _isCrouching = isDown);
     }
   }
 
@@ -350,7 +422,8 @@ class _GameScreenState extends ConsumerState<GameScreen>
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final groundY = size.height * 0.64;
-    final charH = size.height * 0.20;
+    final charH =
+        size.height * 0.20 * (_isCrouching ? _crouchHeightMultiplier : 1.0);
     final charW = charH * 0.55;
     final charScreenX = size.width * 0.27;
     final charTop = groundY - charH + _jumpY;
@@ -378,6 +451,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
               painter: _PlatformPainter(
                 platforms: _levelData!.platforms,
                 worldX: _worldX,
+                gameTime: _gameTime,
               ),
               child: const SizedBox.expand(),
             ),
@@ -453,6 +527,8 @@ class _GameScreenState extends ConsumerState<GameScreen>
             level: widget.level,
             themeLabel: _levelData?.themeLabel ?? '',
             showInteract: _nearNPC != null,
+            dashCooldown: _dashCooldown,
+            isCrouching: _isCrouching,
             onInventory: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const InventoryScreen()),
@@ -474,34 +550,52 @@ class _GameScreenState extends ConsumerState<GameScreen>
           Positioned(
             bottom: size.height * 0.045,
             left: size.width * 0.025,
-            child: Row(
+            child: Column(
               children: [
-                _CircleBtn(
-                  size: btnSize,
-                  onDown: () => setState(() => _movingLeft = true),
-                  onUp: () => setState(() => _movingLeft = false),
-                  child: Icon(
-                    Icons.arrow_back_ios_rounded,
-                    color: Colors.white70,
-                    size: btnSize * 0.42,
-                  ),
+                Row(
+                  children: [
+                    _CircleBtn(
+                      size: btnSize,
+                      onDown: () => setState(() => _movingLeft = true),
+                      onUp: () => setState(() => _movingLeft = false),
+                      child: Icon(
+                        Icons.arrow_back_ios_rounded,
+                        color: Colors.white70,
+                        size: btnSize * 0.42,
+                      ),
+                    ),
+                    SizedBox(width: btnGap),
+                    _CircleBtn(
+                      size: btnSize,
+                      onDown: () => setState(() => _movingRight = true),
+                      onUp: () => setState(() => _movingRight = false),
+                      child: Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        color: Colors.white70,
+                        size: btnSize * 0.42,
+                      ),
+                    ),
+                  ],
                 ),
-                SizedBox(width: btnGap),
+                SizedBox(height: btnGap * 0.5),
+                // Crouch button (down arrow)
                 _CircleBtn(
-                  size: btnSize,
-                  onDown: () => setState(() => _movingRight = true),
-                  onUp: () => setState(() => _movingRight = false),
+                  size: btnSize * 0.8,
+                  onDown: () => _crouch(true),
+                  onUp: () => _crouch(false),
                   child: Icon(
-                    Icons.arrow_forward_ios_rounded,
-                    color: Colors.white70,
-                    size: btnSize * 0.42,
+                    Icons.arrow_downward_rounded,
+                    color: _isCrouching
+                        ? const Color(0xFFFFD700)
+                        : Colors.white70,
+                    size: btnSize * 0.35,
                   ),
                 ),
               ],
             ),
           ),
 
-          // ── A / B buttons ────────────────────────────────────────────────
+          // ── A / B / X buttons ───────────────────────────────────────────
           Positioned(
             bottom: size.height * 0.045,
             right: size.width * 0.025,
@@ -519,6 +613,15 @@ class _GameScreenState extends ConsumerState<GameScreen>
                   color: Colors.red,
                   size: btnSize,
                   onTap: _jump,
+                ),
+                SizedBox(width: btnGap),
+                _LabelBtn(
+                  label: 'X',
+                  color: _dashCooldown <= 0
+                      ? Colors.blue
+                      : Colors.blue.shade900,
+                  size: btnSize,
+                  onTap: _dash,
                 ),
               ],
             ),
@@ -566,23 +669,65 @@ class _GameScreenState extends ConsumerState<GameScreen>
 class _PlatformPainter extends CustomPainter {
   final List<LevelPlatform> platforms;
   final double worldX;
-  const _PlatformPainter({required this.platforms, required this.worldX});
+  final double gameTime;
+  const _PlatformPainter({
+    required this.platforms,
+    required this.worldX,
+    this.gameTime = 0.0,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
     final grassP = Paint()..color = const Color(0xFF4CAF50);
     final dirtP = Paint()..color = const Color(0xFF7A4E2D);
+    final movingP = Paint()..color = const Color(0xFF4CAF50).withOpacity(0.7);
+
     for (final p in platforms) {
-      final sx = p.worldX - worldX;
+      // Use getCurrentX for moving platforms
+      final px = p.getCurrentX(gameTime);
+      final sx = px - worldX;
       if (sx > size.width + p.width || sx < -p.width) continue;
-      canvas.drawRect(Rect.fromLTWH(sx, p.screenY - 6, p.width, 6), grassP);
+
+      // Draw platform with different color if moving
+      final platformPaint = p.isMoving ? movingP : grassP;
+      canvas.drawRect(
+        Rect.fromLTWH(sx, p.screenY - 6, p.width, 6),
+        platformPaint,
+      );
       canvas.drawRect(Rect.fromLTWH(sx, p.screenY, p.width, 14), dirtP);
+
+      // Add arrow indicator for moving platforms
+      if (p.isMoving) {
+        final arrowP = Paint()..color = Colors.white.withOpacity(0.5);
+        final arrowSize = 8.0;
+        final centerX = sx + p.width / 2;
+        final centerY = p.screenY - 20;
+        // Draw left/right arrows
+        canvas.drawCircle(
+          Offset(centerX - p.moveRange / 2, centerY),
+          3,
+          arrowP,
+        );
+        canvas.drawCircle(
+          Offset(centerX + p.moveRange / 2, centerY),
+          3,
+          arrowP,
+        );
+        // Draw horizontal line
+        canvas.drawLine(
+          Offset(centerX - p.moveRange / 2, centerY),
+          Offset(centerX + p.moveRange / 2, centerY),
+          arrowP,
+        );
+      }
     }
   }
 
   @override
   bool shouldRepaint(_PlatformPainter old) =>
-      old.worldX != worldX || old.platforms != platforms;
+      old.worldX != worldX ||
+      old.platforms != platforms ||
+      old.gameTime != gameTime;
 }
 
 // ── Token widget ──────────────────────────────────────────────────────────────
@@ -751,12 +896,17 @@ class _NPCWidgetState extends State<_NPCWidget>
         Stack(
           alignment: Alignment.center,
           children: [
-            Image.asset(
-              _framePath(),
-              width: spriteW,
-              height: spriteH,
-              filterQuality: FilterQuality.none,
-              fit: BoxFit.contain,
+            Transform(
+              alignment: Alignment.center,
+              transform: Matrix4.identity()
+                ..scale(-1.0, 1.0), // Flip horizontally to face left
+              child: Image.asset(
+                _framePath(),
+                width: spriteW,
+                height: spriteH,
+                filterQuality: FilterQuality.none,
+                fit: BoxFit.contain,
+              ),
             ),
             // Green checkmark overlay when completed
             if (widget.completed)

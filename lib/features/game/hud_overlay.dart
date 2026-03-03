@@ -12,6 +12,8 @@ class HudOverlay extends StatefulWidget {
   final bool showInteract;
   final int? timerSeconds;
   final VoidCallback onInventory;
+  final double? dashCooldown;
+  final bool isCrouching;
 
   const HudOverlay({
     super.key,
@@ -24,6 +26,8 @@ class HudOverlay extends StatefulWidget {
     required this.showInteract,
     required this.onInventory,
     this.timerSeconds,
+    this.dashCooldown,
+    this.isCrouching = false,
   });
 
   @override
@@ -173,6 +177,63 @@ class _HudOverlayState extends State<HudOverlay> {
                   ),
                 ),
                 SizedBox(width: size.width * 0.015),
+                // Dash cooldown indicator
+                if (widget.dashCooldown != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: widget.dashCooldown! <= 0
+                          ? const Color(0xFF2196F3)
+                          : const Color(0xFF1565C0),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.white38),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.flash_on,
+                          color: Colors.white,
+                          size: size.height * 0.035,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'X',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: size.height * 0.028,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                // Crouch indicator
+                if (widget.isCrouching)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4CAF50),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.white38),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.arrow_downward,
+                          color: Colors.white,
+                          size: size.height * 0.035,
+                        ),
+                      ],
+                    ),
+                  ),
                 // World / level label
                 Text(
                   'W${widget.world}-L${widget.level}  ${widget.themeLabel}',

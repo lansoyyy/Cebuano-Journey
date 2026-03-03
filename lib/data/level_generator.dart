@@ -28,7 +28,21 @@ class LevelGenerator {
     for (int i = 0; i < platformCount; i++) {
       final w = 80.0 + rng.nextDouble() * 120;
       final sy = groundY - 80 - rng.nextDouble() * (groundY * 0.45);
-      platforms.add(LevelPlatform(worldX: px, screenY: sy, width: w));
+      // Make some platforms moving (30% chance, more on higher difficulty)
+      final isMoving = rng.nextDouble() < 0.3 + (difficulty * 0.02);
+      final moveSpeed = isMoving ? 30.0 + rng.nextDouble() * 40.0 : 0.0;
+      final moveRange = isMoving ? 60.0 + rng.nextDouble() * 80.0 : 0.0;
+      platforms.add(
+        LevelPlatform(
+          worldX: px,
+          screenY: sy,
+          width: w,
+          isMoving: isMoving,
+          moveSpeed: moveSpeed,
+          moveRange: moveRange,
+          initialX: px,
+        ),
+      );
       px += 140 + rng.nextDouble() * 180;
     }
 

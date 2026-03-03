@@ -5,12 +5,31 @@ class LevelPlatform {
   final double worldX;
   final double screenY;
   final double width;
+  final bool isMoving;
+  final double moveSpeed;
+  final double moveRange;
+  final double initialX;
 
   const LevelPlatform({
     required this.worldX,
     required this.screenY,
     required this.width,
+    this.isMoving = false,
+    this.moveSpeed = 50.0,
+    this.moveRange = 100.0,
+    this.initialX = 0.0,
   });
+
+  /// Get current X position based on time
+  double getCurrentX(double time) {
+    if (!isMoving) return worldX;
+    final offset = (time * moveSpeed) % (moveRange * 2);
+    if (offset < moveRange) {
+      return initialX + offset;
+    } else {
+      return initialX + (moveRange * 2 - offset);
+    }
+  }
 }
 
 class LevelToken {
