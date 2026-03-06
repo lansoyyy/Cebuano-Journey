@@ -197,6 +197,29 @@ class AudioService {
     }
   }
 
+  /// Play word pronunciation
+  /// Takes a Cebuano word and plays its pronunciation audio file
+  Future<void> playWordPronunciation(String cebuanoWord) async {
+    if (!_settings.voiceOverEnabled || _voicePlayer == null) return;
+
+    // Convert word to lowercase for filename matching
+    final fileName = cebuanoWord.toLowerCase().replaceAll(' ', '_');
+
+    try {
+      await _voicePlayer!.play(AssetSource('$_voicePath$fileName.mp3'));
+      await _voicePlayer!.setVolume(_settings.voiceOverVolume);
+    } catch (e) {
+      debugPrint('Error playing word pronunciation for "$cebuanoWord": $e');
+      // Try alternative filename format without spaces
+      try {
+        final altFileName = cebuanoWord.toLowerCase().replaceAll(' ', '');
+        await _voicePlayer!.play(AssetSource('$_voicePath$altFileName.mp3'));
+      } catch (e2) {
+        debugPrint('Alternative filename also failed: $e2');
+      }
+    }
+  }
+
   /// Stop voice over
   Future<void> stopVoice() async {
     if (_voicePlayer == null) return;

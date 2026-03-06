@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/providers/player_provider.dart';
+import '../../data/level_configuration.dart';
 import '../game/game_screen.dart';
+import '../game/lesson_screen.dart';
 
 class LevelSelectScreen extends ConsumerWidget {
   const LevelSelectScreen({super.key});
@@ -27,7 +29,10 @@ class LevelSelectScreen extends ConsumerWidget {
             children: [
               // Header
               Padding(
-                padding: EdgeInsets.symmetric(horizontal: size.width * 0.04, vertical: size.height * 0.02),
+                padding: EdgeInsets.symmetric(
+                  horizontal: size.width * 0.04,
+                  vertical: size.height * 0.02,
+                ),
                 child: Row(
                   children: [
                     GestureDetector(
@@ -39,7 +44,11 @@ class LevelSelectScreen extends ConsumerWidget {
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: Colors.white38),
                         ),
-                        child: Icon(Icons.arrow_back, color: Colors.white, size: size.height * 0.05),
+                        child: Icon(
+                          Icons.arrow_back,
+                          color: Colors.white,
+                          size: size.height * 0.05,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 16),
@@ -60,11 +69,12 @@ class LevelSelectScreen extends ConsumerWidget {
               Expanded(
                 child: ListView.builder(
                   padding: EdgeInsets.all(size.width * 0.04),
-                  itemCount: maxWorld, // Can only see worlds unlocked by player level
+                  itemCount:
+                      maxWorld, // Can only see worlds unlocked by player level
                   itemBuilder: (context, wIndex) {
                     final worldNum = wIndex + 1;
                     final levelsInWorld = (worldNum == maxWorld) ? maxLevel : 5;
-                    
+
                     return Container(
                       margin: EdgeInsets.only(bottom: size.height * 0.04),
                       padding: EdgeInsets.all(size.width * 0.02),
@@ -77,7 +87,10 @@ class LevelSelectScreen extends ConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Padding(
-                            padding: const EdgeInsets.only(left: 8.0, bottom: 12.0),
+                            padding: const EdgeInsets.only(
+                              left: 8.0,
+                              bottom: 12.0,
+                            ),
                             child: Text(
                               'World $worldNum',
                               style: TextStyle(
@@ -88,50 +101,137 @@ class LevelSelectScreen extends ConsumerWidget {
                             ),
                           ),
                           SizedBox(
-                            height: size.height * 0.18,
+                            height: size.height * 0.22,
                             child: ListView.builder(
                               scrollDirection: Axis.horizontal,
                               itemCount: 5,
                               itemBuilder: (context, lIndex) {
                                 final levelNum = lIndex + 1;
                                 final isUnlocked = levelNum <= levelsInWorld;
-                                
-                                return GestureDetector(
-                                  onTap: isUnlocked ? () {
-                                    Navigator.pushReplacement(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => GameScreen(world: worldNum, level: levelNum),
+                                final globalLevel =
+                                    ((worldNum - 1) * 5) + levelNum;
+
+                                return Container(
+                                  width: size.height * 0.18,
+                                  margin: const EdgeInsets.only(right: 12),
+                                  child: Column(
+                                    children: [
+                                      // Level number card
+                                      Expanded(
+                                        child: GestureDetector(
+                                          onTap: isUnlocked
+                                              ? () {
+                                                  Navigator.pushReplacement(
+                                                    context,
+                                                    MaterialPageRoute(
+                                                      builder: (_) =>
+                                                          GameScreen(
+                                                            world: worldNum,
+                                                            level: levelNum,
+                                                          ),
+                                                    ),
+                                                  );
+                                                }
+                                              : null,
+                                          child: Container(
+                                            decoration: BoxDecoration(
+                                              color: isUnlocked
+                                                  ? const Color(0xFF3A6EA5)
+                                                  : const Color(0xFF1A2A3A),
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              border: Border.all(
+                                                color: isUnlocked
+                                                    ? const Color(0xFFFFD700)
+                                                    : Colors.white12,
+                                                width: isUnlocked ? 2 : 1,
+                                              ),
+                                            ),
+                                            child: Center(
+                                              child: isUnlocked
+                                                  ? Text(
+                                                      '$levelNum',
+                                                      style: TextStyle(
+                                                        color: Colors.white,
+                                                        fontSize:
+                                                            size.height * 0.08,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                      ),
+                                                    )
+                                                  : Icon(
+                                                      Icons.lock,
+                                                      color: Colors.white24,
+                                                      size: size.height * 0.08,
+                                                    ),
+                                            ),
+                                          ),
+                                        ),
                                       ),
-                                    );
-                                  } : null,
-                                  child: Container(
-                                    width: size.height * 0.18,
-                                    margin: const EdgeInsets.only(right: 12),
-                                    decoration: BoxDecoration(
-                                      color: isUnlocked ? const Color(0xFF3A6EA5) : const Color(0xFF1A2A3A),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: isUnlocked ? const Color(0xFFFFD700) : Colors.white12,
-                                        width: isUnlocked ? 2 : 1,
-                                      ),
-                                    ),
-                                    child: Center(
-                                      child: isUnlocked
-                                          ? Text(
-                                              '$levelNum',
+                                      SizedBox(height: size.height * 0.01),
+                                      // Lesson button
+                                      GestureDetector(
+                                        onTap: isUnlocked
+                                            ? () {
+                                                final levelConfig =
+                                                    LevelDatabase.levels
+                                                        .firstWhere(
+                                                          (l) =>
+                                                              l.level ==
+                                                              globalLevel,
+                                                          orElse: () =>
+                                                              LevelDatabase
+                                                                  .levels
+                                                                  .first,
+                                                        );
+                                                Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (_) =>
+                                                        LessonScreen(
+                                                          lessonNumber:
+                                                              globalLevel,
+                                                          lessonTitle:
+                                                              levelConfig.name,
+                                                          lessonDescription:
+                                                              levelConfig
+                                                                  .description,
+                                                        ),
+                                                  ),
+                                                );
+                                              }
+                                            : null,
+                                        child: Container(
+                                          height: size.height * 0.04,
+                                          decoration: BoxDecoration(
+                                            color: isUnlocked
+                                                ? const Color(0xFF4CAF50)
+                                                : const Color(0xFF1A2A3A),
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                            border: Border.all(
+                                              color: isUnlocked
+                                                  ? Colors.white38
+                                                  : Colors.white12,
+                                              width: 1,
+                                            ),
+                                          ),
+                                          child: Center(
+                                            child: Text(
+                                              'Lesson',
                                               style: TextStyle(
-                                                color: Colors.white,
-                                                fontSize: size.height * 0.08,
+                                                color: isUnlocked
+                                                    ? Colors.white
+                                                    : Colors.white24,
+                                                fontSize: size.height * 0.018,
                                                 fontWeight: FontWeight.bold,
                                               ),
-                                            )
-                                          : Icon(
-                                              Icons.lock,
-                                              color: Colors.white24,
-                                              size: size.height * 0.08,
                                             ),
-                                    ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 );
                               },
