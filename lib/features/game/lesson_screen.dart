@@ -196,116 +196,7 @@ class _LessonScreenState extends ConsumerState<LessonScreen> {
   }
 
   Widget _buildVocabularyCard(BuildContext context, Size size, dynamic word) {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0x33FFFFFF),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white24),
-      ),
-      child: Padding(
-        padding: EdgeInsets.all(size.width * 0.03),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              word.cebuano,
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: size.height * 0.03,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            SizedBox(height: size.height * 0.01),
-
-            if (word.pronunciation != null && word.pronunciation!.isNotEmpty)
-              Text(
-                '/${word.pronunciation}/',
-                style: TextStyle(
-                  color: const Color(0xFFFFD700),
-                  fontSize: size.height * 0.02,
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
-            SizedBox(height: size.height * 0.01),
-
-            Text(
-              word.english,
-              style: TextStyle(
-                color: Colors.white70,
-                fontSize: size.height * 0.025,
-              ),
-            ),
-
-            if (word.exampleSentence != null &&
-                word.exampleSentence!.isNotEmpty) ...[
-              SizedBox(height: size.height * 0.015),
-              Container(
-                padding: EdgeInsets.all(size.width * 0.02),
-                decoration: BoxDecoration(
-                  color: const Color(0x1AFFD700),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Example:',
-                      style: TextStyle(
-                        color: const Color(0xFFFFD700),
-                        fontSize: size.height * 0.018,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      word.exampleSentence!,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: size.height * 0.022,
-                      ),
-                    ),
-                    if (word.exampleTranslation != null &&
-                        word.exampleTranslation!.isNotEmpty)
-                      Text(
-                        word.exampleTranslation!,
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: size.height * 0.02,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-
-            SizedBox(height: size.height * 0.01),
-            GestureDetector(
-              onTap: () {
-                final audioService = AudioService();
-                audioService.playWordPronunciation(word.cebuano);
-              },
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.volume_up,
-                    color: const Color(0xFFFFD700),
-                    size: size.height * 0.025,
-                  ),
-                  SizedBox(width: size.width * 0.02),
-                  Text(
-                    'Listen',
-                    style: TextStyle(
-                      color: const Color(0xFFFFD700),
-                      fontSize: size.height * 0.02,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    return _VocabCard(size: size, word: word);
   }
 
   Widget _buildGrammarTab(BuildContext context, Size size) {
@@ -876,5 +767,191 @@ class _LessonScreenState extends ConsumerState<LessonScreen> {
           },
         ];
     }
+  }
+}
+
+// ── Vocabulary card with tappable example sentence ────────────────────────────
+class _VocabCard extends StatefulWidget {
+  final Size size;
+  final dynamic word;
+
+  const _VocabCard({required this.size, required this.word});
+
+  @override
+  State<_VocabCard> createState() => _VocabCardState();
+}
+
+class _VocabCardState extends State<_VocabCard> {
+  bool _showTranslation = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final size = widget.size;
+    final word = widget.word;
+    final hasExample =
+        word.exampleSentence != null && (word.exampleSentence as String).isNotEmpty;
+    final hasTranslation =
+        word.exampleTranslation != null &&
+        (word.exampleTranslation as String).isNotEmpty;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0x33FFFFFF),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white24),
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(size.width * 0.03),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              word.cebuano as String,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: size.height * 0.03,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            SizedBox(height: size.height * 0.01),
+            if (word.pronunciation != null &&
+                (word.pronunciation as String).isNotEmpty)
+              Text(
+                '/${word.pronunciation}/',
+                style: TextStyle(
+                  color: const Color(0xFFFFD700),
+                  fontSize: size.height * 0.02,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            SizedBox(height: size.height * 0.01),
+            Text(
+              word.english as String,
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: size.height * 0.025,
+              ),
+            ),
+            if (hasExample) ...[              
+              SizedBox(height: size.height * 0.015),
+              GestureDetector(
+                onTap: hasTranslation
+                    ? () => setState(() => _showTranslation = !_showTranslation)
+                    : null,
+                child: Container(
+                  padding: EdgeInsets.all(size.width * 0.02),
+                  decoration: BoxDecoration(
+                    color: _showTranslation
+                        ? const Color(0x33FFD700)
+                        : const Color(0x1AFFD700),
+                    borderRadius: BorderRadius.circular(8),
+                    border: hasTranslation
+                        ? Border.all(
+                            color: const Color(0x55FFD700),
+                            width: 1,
+                          )
+                        : null,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            'Example:',
+                            style: TextStyle(
+                              color: const Color(0xFFFFD700),
+                              fontSize: size.height * 0.018,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          if (hasTranslation) ...[              
+                            const Spacer(),
+                            Icon(
+                              _showTranslation
+                                  ? Icons.visibility
+                                  : Icons.visibility_off,
+                              color: const Color(0xAAFFD700),
+                              size: size.height * 0.022,
+                            ),
+                          ],
+                        ],
+                      ),
+                      SizedBox(height: size.height * 0.005),
+                      Text(
+                        word.exampleSentence as String,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: size.height * 0.022,
+                        ),
+                      ),
+                      // Translation revealed on tap
+                      AnimatedCrossFade(
+                        duration: const Duration(milliseconds: 250),
+                        crossFadeState: _showTranslation
+                            ? CrossFadeState.showSecond
+                            : CrossFadeState.showFirst,
+                        firstChild: hasTranslation
+                            ? Padding(
+                                padding:
+                                    EdgeInsets.only(top: size.height * 0.005),
+                                child: Text(
+                                  'Tap to see translation',
+                                  style: TextStyle(
+                                    color: const Color(0x66FFD700),
+                                    fontSize: size.height * 0.018,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              )
+                            : const SizedBox.shrink(),
+                        secondChild: hasTranslation
+                            ? Padding(
+                                padding:
+                                    EdgeInsets.only(top: size.height * 0.005),
+                                child: Text(
+                                  word.exampleTranslation as String,
+                                  style: TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: size.height * 0.02,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              )
+                            : const SizedBox.shrink(),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+            SizedBox(height: size.height * 0.01),
+            GestureDetector(
+              onTap: () {
+                final audioService = AudioService();
+                audioService.playWordPronunciation(word.cebuano as String);
+              },
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.volume_up,
+                    color: const Color(0xFFFFD700),
+                    size: size.height * 0.025,
+                  ),
+                  SizedBox(width: size.width * 0.02),
+                  Text(
+                    'Listen',
+                    style: TextStyle(
+                      color: const Color(0xFFFFD700),
+                      fontSize: size.height * 0.02,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

@@ -91,4 +91,14 @@ class CebuanoWordBank {
     final count = (levelNumber * 3 + 5).clamp(5, words.length);
     return words.take(count).toList();
   }
+
+  /// Returns the global level number (difficulty) at which this word first
+  /// becomes available, using the same formula as [forLevel].
+  /// forLevel(n) = take(n*3+5), so word at index i first appears at
+  /// level n where n*3+5 > i  →  n = ceil((i-4)/3), minimum 1.
+  static int levelForWord(String wordId) {
+    final idx = words.indexWhere((w) => w.id == wordId);
+    if (idx < 0) return 1;
+    return (((idx - 4) / 3).ceil()).clamp(1, 99);
+  }
 }

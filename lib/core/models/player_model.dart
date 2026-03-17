@@ -7,6 +7,12 @@ class PlayerModel {
   final List<String> collectedWordIds;
   final List<int> powerupCounts; // [hintCount]
   final List<DateTime> heartLostTimes;
+  // ── Replayability additions ──
+  final int coins;
+  /// Key: "${world}_${level}", value: best star count (1–3)
+  final Map<String, int> levelStars;
+  final int streakDays;
+  final DateTime? lastPlayDate;
 
   const PlayerModel({
     required this.name,
@@ -17,11 +23,17 @@ class PlayerModel {
     this.collectedWordIds = const [],
     this.powerupCounts = const [0],
     this.heartLostTimes = const [],
+    this.coins = 0,
+    this.levelStars = const {},
+    this.streakDays = 0,
+    this.lastPlayDate,
   });
 
   int get xpForNextLevel => (level * level * 150 + 100).clamp(100, 99999);
   double get xpProgress => (xp / xpForNextLevel).clamp(0.0, 1.0);
   int get hintCount => powerupCounts.isNotEmpty ? powerupCounts[0] : 0;
+
+  int starsFor(int world, int lvl) => levelStars['${world}_$lvl'] ?? 0;
 
   int get currentHearts {
     final now = DateTime.now();
@@ -49,6 +61,11 @@ class PlayerModel {
     List<String>? collectedWordIds,
     List<int>? powerupCounts,
     List<DateTime>? heartLostTimes,
+    int? coins,
+    Map<String, int>? levelStars,
+    int? streakDays,
+    DateTime? lastPlayDate,
+    bool clearLastPlayDate = false,
   }) =>
       PlayerModel(
         name: name ?? this.name,
@@ -59,5 +76,10 @@ class PlayerModel {
         collectedWordIds: collectedWordIds ?? this.collectedWordIds,
         powerupCounts: powerupCounts ?? this.powerupCounts,
         heartLostTimes: heartLostTimes ?? this.heartLostTimes,
+        coins: coins ?? this.coins,
+        levelStars: levelStars ?? this.levelStars,
+        streakDays: streakDays ?? this.streakDays,
+        lastPlayDate:
+            clearLastPlayDate ? null : (lastPlayDate ?? this.lastPlayDate),
       );
 }

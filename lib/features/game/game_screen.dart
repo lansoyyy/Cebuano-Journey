@@ -309,35 +309,67 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
   void _showLevelComplete() {
     final tokensCollected = _levelData!.tokens.where((t) => t.collected).length;
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => LevelCompleteScreen(
-          world: widget.world,
-          level: widget.level,
-          xpEarned: _xpEarnedThisLevel,
-          tokensCollected: tokensCollected,
-          onMenu: () => Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const MainMenuScreen()),
-          ),
-          onNext: () {
-            int nw = widget.world;
-            int nl = widget.level + 1;
-            if (nl > 5) {
-              nl = 1;
-              nw++;
-            }
-            Navigator.pushReplacement(
+    final totalTokens = _levelData!.tokens.length;
+    final npcsCompleted = _levelData!.npcs.where((n) => n.completed).length;
+    final totalNPCs = _levelData!.npcs.length;
+    final tokenPct = totalTokens > 0 ? tokensCollected / totalTokens : 0.0;
+    final allNpcsDone = npcsCompleted == totalNPCs;
+
+    // Star rating: 3 = all NPCs done + 80%+ tokens, 2 = all NPCs OR 50%+ tokens, 1 = cleared
+    final int stars;
+    if (allNpcsDone && tokenPct >= 0.8) {
+      stars = 3;
+    } else if (allNpcsDone || tokenPct >= 0.5) {
+      stars = 2;
+    } else {
+      stars = 1;
+    }
+
+    final prevStars = ref.read(playerProvider).starsFor(widget.world, widget.level);
+
+    // Save result and get coins earned (async, fire-and-forget for nav purposes)
+    ref.read(playerProvider.notifier).saveLevelResult(widget.world, widget.level, stars).then((coinsEarned) {
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => LevelCompleteScreen(
+            world: widget.world,
+            level: widget.level,
+            xpEarned: _xpEarnedThisLevel,
+            tokensCollected: tokensCollected,
+            totalTokens: totalTokens,
+            stars: stars,
+            prevBestStars: prevStars,
+            coinsEarned: coinsEarned,
+            onReplay: () => Navigator.pushReplacement(
               context,
               MaterialPageRoute(
-                builder: (_) => GameScreen(world: nw, level: nl),
+                builder: (_) => GameScreen(world: widget.world, level: widget.level),
               ),
-            );
-          },
+            ),
+            onMenu: () => Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => const MainMenuScreen()),
+            ),
+            onNext: () {
+              int nw = widget.world;
+              int nl = widget.level + 1;
+              if (nl > 5) {
+                nl = 1;
+                nw++;
+              }
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => GameScreen(world: nw, level: nl),
+                ),
+              );
+            },
+          ),
         ),
-      ),
-    );
+      );
+    });
   }
 
   void _jump() {

@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
 
-class LevelCompleteScreen extends StatelessWidget {
+// ── Level Complete ────────────────────────────────────────────────────────────
+class LevelCompleteScreen extends StatefulWidget {
   final int world;
   final int level;
   final int xpEarned;
   final int tokensCollected;
+  final int totalTokens;
+  final int stars;
+  final int prevBestStars;
+  final int coinsEarned;
   final VoidCallback onNext;
   final VoidCallback onMenu;
+  final VoidCallback onReplay;
 
   const LevelCompleteScreen({
     super.key,
@@ -14,18 +20,62 @@ class LevelCompleteScreen extends StatelessWidget {
     required this.level,
     required this.xpEarned,
     required this.tokensCollected,
+    required this.totalTokens,
+    required this.stars,
+    required this.prevBestStars,
+    required this.coinsEarned,
     required this.onNext,
     required this.onMenu,
+    required this.onReplay,
   });
+
+  @override
+  State<LevelCompleteScreen> createState() => _LevelCompleteScreenState();
+}
+
+class _LevelCompleteScreenState extends State<LevelCompleteScreen>
+    with TickerProviderStateMixin {
+  late final AnimationController _starCtrl;
+  late final List<Animation<double>> _starAnims;
+
+  @override
+  void initState() {
+    super.initState();
+    _starCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    // Each star pops in sequentially
+    _starAnims = List.generate(3, (i) {
+      final start = i * 0.28;
+      final end = (start + 0.4).clamp(0.0, 1.0);
+      return CurvedAnimation(
+        parent: _starCtrl,
+        curve: Interval(start, end, curve: Curves.elasticOut),
+      );
+    });
+    // Small delay before animating so the screen settles first
+    Future.delayed(const Duration(milliseconds: 200), () {
+      if (mounted) _starCtrl.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _starCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
+    final isNewBest = widget.stars > widget.prevBestStars;
+
     return Scaffold(
       backgroundColor: const Color(0xDD000000),
       body: Center(
         child: Container(
-          width: size.width * 0.5,
+          width: size.width * 0.55,
           padding: EdgeInsets.all(size.width * 0.03),
           decoration: BoxDecoration(
             color: const Color(0xFF1A3A5C),
@@ -42,39 +92,111 @@ class LevelCompleteScreen extends StatelessWidget {
                 'LEVEL COMPLETE!',
                 style: TextStyle(
                   color: const Color(0xFFFFD700),
-                  fontSize: size.height * 0.06,
+                  fontSize: size.height * 0.055,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 2,
                 ),
               ),
+              if (isNewBest) ...[
+                SizedBox(height: size.height * 0.01),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFF8C00),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '★ NEW BEST!',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: size.height * 0.022,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+              SizedBox(height: size.height * 0.03),
+
+              // ── Animated stars ──────────────────────────────────────────
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(3, (i) {
+                  final earned = i < widget.stars;
+                  return AnimatedBuilder(
+                    animation: _starAnims[i],
+                    builder: (_, __) {
+                      final scale = earned ? _starAnims[i].value : 1.0;
+                      return Transform.scale(
+                        scale: scale,
+                        child: Icon(
+                          earned ? Icons.star : Icons.star_border,
+                          color: earned
+                              ? const Color(0xFFFFD700)
+                              : Colors.white24,
+                          size: size.height * 0.09,
+                        ),
+                      );
+                    },
+                  );
+                }),
+              ),
+
+              SizedBox(height: size.height * 0.03),
+
+              _StatRow('World - Level:', 'W${widget.world} - L${widget.level}', size),
+              const SizedBox(height: 8),
+              _StatRow('XP Earned:', '+${widget.xpEarned} XP', size),
+              const SizedBox(height: 8),
+              _StatRow(
+                'Tokens Found:',
+                '${widget.tokensCollected}/${widget.totalTokens}',
+                size,
+              ),
+              if (widget.coinsEarned > 0) ...[
+                const SizedBox(height: 8),
+                _StatRow(
+                  'Coins Earned:',
+                  '+${widget.coinsEarned} 🪙',
+                  size,
+                  valueColor: const Color(0xFFFFD700),
+                ),
+              ],
+
               SizedBox(height: size.height * 0.04),
-              _StatRow('World - Level:', 'W$world - L$level', size),
-              const SizedBox(height: 8),
-              _StatRow('XP Earned:', '+$xpEarned XP', size),
-              const SizedBox(height: 8),
-              _StatRow('Tokens Found:', '$tokensCollected', size),
-              SizedBox(height: size.height * 0.06),
+
+              // ── Buttons ─────────────────────────────────────────────────
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  ElevatedButton.icon(
-                    onPressed: onMenu,
-                    icon: const Icon(Icons.menu, color: Colors.white),
-                    label: const Text('Menu', style: TextStyle(color: Colors.white)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF3A6EA5),
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                    ),
+                  // Menu
+                  _ActionButton(
+                    label: 'Menu',
+                    icon: Icons.menu,
+                    bgColor: const Color(0xFF3A6EA5),
+                    textColor: Colors.white,
+                    onTap: widget.onMenu,
+                    size: size,
                   ),
-                  const SizedBox(width: 20),
-                  ElevatedButton.icon(
-                    onPressed: onNext,
-                    icon: const Icon(Icons.arrow_forward, color: Colors.black),
-                    label: const Text('Next Level', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFFD700),
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                    ),
+                  SizedBox(width: size.width * 0.015),
+                  // Replay
+                  _ActionButton(
+                    label: 'Replay',
+                    icon: Icons.replay,
+                    bgColor: const Color(0xFF2A5A2A),
+                    textColor: Colors.white,
+                    onTap: widget.onReplay,
+                    size: size,
+                  ),
+                  SizedBox(width: size.width * 0.015),
+                  // Next
+                  _ActionButton(
+                    label: 'Next',
+                    icon: Icons.arrow_forward,
+                    bgColor: const Color(0xFFFFD700),
+                    textColor: Colors.black,
+                    onTap: widget.onNext,
+                    size: size,
+                    bold: true,
                   ),
                 ],
               ),
@@ -86,6 +208,7 @@ class LevelCompleteScreen extends StatelessWidget {
   }
 }
 
+// ── Game Over ─────────────────────────────────────────────────────────────────
 class GameOverScreen extends StatelessWidget {
   final VoidCallback onRetry;
   final VoidCallback onMenu;
@@ -160,16 +283,68 @@ class _StatRow extends StatelessWidget {
   final String label;
   final String val;
   final Size size;
-  const _StatRow(this.label, this.val, this.size);
+  final Color? valueColor;
+  const _StatRow(this.label, this.val, this.size, {this.valueColor});
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: TextStyle(color: Colors.white70, fontSize: size.height * 0.035)),
-        Text(val, style: TextStyle(color: Colors.white, fontSize: size.height * 0.035, fontWeight: FontWeight.bold)),
+        Text(label, style: TextStyle(color: Colors.white70, fontSize: size.height * 0.030)),
+        Text(
+          val,
+          style: TextStyle(
+            color: valueColor ?? Colors.white,
+            fontSize: size.height * 0.030,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
       ],
+    );
+  }
+}
+
+class _ActionButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color bgColor;
+  final Color textColor;
+  final VoidCallback onTap;
+  final Size size;
+  final bool bold;
+
+  const _ActionButton({
+    required this.label,
+    required this.icon,
+    required this.bgColor,
+    required this.textColor,
+    required this.onTap,
+    required this.size,
+    this.bold = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ElevatedButton.icon(
+      onPressed: onTap,
+      icon: Icon(icon, color: textColor, size: size.height * 0.025),
+      label: Text(
+        label,
+        style: TextStyle(
+          color: textColor,
+          fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+          fontSize: size.height * 0.022,
+        ),
+      ),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: bgColor,
+        padding: EdgeInsets.symmetric(
+          horizontal: size.width * 0.02,
+          vertical: size.height * 0.012,
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
     );
   }
 }

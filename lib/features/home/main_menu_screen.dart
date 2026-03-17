@@ -1,15 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/providers/player_provider.dart';
 import 'options_screen.dart';
 import 'level_select_screen.dart';
 import 'game_background_painter.dart';
 
-class MainMenuScreen extends StatelessWidget {
+class MainMenuScreen extends ConsumerStatefulWidget {
   const MainMenuScreen({super.key});
+
+  @override
+  ConsumerState<MainMenuScreen> createState() => _MainMenuScreenState();
+}
+
+class _MainMenuScreenState extends ConsumerState<MainMenuScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Update daily streak when the player reaches the main menu
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(playerProvider.notifier).checkAndUpdateStreak();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
+    final player = ref.watch(playerProvider);
 
     return Scaffold(
       body: Stack(
@@ -32,8 +49,77 @@ class MainMenuScreen extends StatelessWidget {
             ),
           ),
 
+          // Streak + Coins badge — top-right
+          Positioned(
+            top: size.height * 0.03,
+            right: size.width * 0.03,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (player.streakDays > 0)
+                  _BadgeChip(
+                    icon: Icons.local_fire_department,
+                    iconColor: const Color(0xFFFF6B00),
+                    label: '${player.streakDays} day streak',
+                    size: size,
+                  ),
+                SizedBox(height: size.height * 0.008),
+                _BadgeChip(
+                  icon: Icons.toll,
+                  iconColor: const Color(0xFFFFD700),
+                  label: '${player.coins} coins',
+                  size: size,
+                ),
+              ],
+            ),
+          ),
+
           // Title.png (title text + shield background) + button overlay
           Center(child: _MenuPanel(size: size)),
+        ],
+      ),
+    );
+  }
+}
+
+class _BadgeChip extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String label;
+  final Size size;
+
+  const _BadgeChip({
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+    required this.size,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: size.width * 0.018,
+        vertical: size.height * 0.008,
+      ),
+      decoration: BoxDecoration(
+        color: const Color(0xCC0D1B3E),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white24),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: iconColor, size: size.height * 0.028),
+          SizedBox(width: size.width * 0.01),
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: size.height * 0.022,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
         ],
       ),
     );

@@ -110,6 +110,9 @@ class LevelSelectScreen extends ConsumerWidget {
                                 final isUnlocked = levelNum <= levelsInWorld;
                                 final globalLevel =
                                     ((worldNum - 1) * 5) + levelNum;
+                                final bestStars =
+                                    player.starsFor(worldNum, levelNum);
+                                final isCompleted = bestStars > 0;
 
                                 return Container(
                                   width: size.height * 0.18,
@@ -136,28 +139,52 @@ class LevelSelectScreen extends ConsumerWidget {
                                           child: Container(
                                             decoration: BoxDecoration(
                                               color: isUnlocked
-                                                  ? const Color(0xFF3A6EA5)
+                                                  ? (isCompleted
+                                                      ? const Color(0xFF2A5A2A)
+                                                      : const Color(0xFF3A6EA5))
                                                   : const Color(0xFF1A2A3A),
                                               borderRadius:
                                                   BorderRadius.circular(12),
                                               border: Border.all(
                                                 color: isUnlocked
-                                                    ? const Color(0xFFFFD700)
+                                                    ? (isCompleted
+                                                        ? const Color(0xFF4CAF50)
+                                                        : const Color(0xFFFFD700))
                                                     : Colors.white12,
                                                 width: isUnlocked ? 2 : 1,
                                               ),
                                             ),
                                             child: Center(
                                               child: isUnlocked
-                                                  ? Text(
-                                                      '$levelNum',
-                                                      style: TextStyle(
-                                                        color: Colors.white,
-                                                        fontSize:
-                                                            size.height * 0.08,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                      ),
+                                                  ? Column(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        Text(
+                                                          '$levelNum',
+                                                          style: TextStyle(
+                                                            color: Colors.white,
+                                                            fontSize:
+                                                                size.height * 0.07,
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                          ),
+                                                        ),
+                                                        if (isCompleted)
+                                                          Row(
+                                                            mainAxisSize: MainAxisSize.min,
+                                                            children: List.generate(3, (si) {
+                                                              return Icon(
+                                                                si < bestStars
+                                                                    ? Icons.star
+                                                                    : Icons.star_border,
+                                                                color: si < bestStars
+                                                                    ? const Color(0xFFFFD700)
+                                                                    : Colors.white24,
+                                                                size: size.height * 0.022,
+                                                              );
+                                                            }),
+                                                          ),
+                                                      ],
                                                     )
                                                   : Icon(
                                                       Icons.lock,
@@ -243,7 +270,30 @@ class LevelSelectScreen extends ConsumerWidget {
                   },
                 ),
               ),
-            ],
+              // Coins display
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0x33FFD700),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0x66FFD700)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.toll, color: const Color(0xFFFFD700), size: size.height * 0.03),
+                    const SizedBox(width: 6),
+                    Text(
+                      '${player.coins}',
+                      style: TextStyle(
+                        color: const Color(0xFFFFD700),
+                        fontSize: size.height * 0.028,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),            ],
           ),
         ),
       ),

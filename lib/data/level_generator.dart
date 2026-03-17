@@ -80,12 +80,17 @@ class LevelGenerator {
     for (int i = 0; i < npcCount; i++) {
       final npcX = worldLength * ((i + 1) / (npcCount + 1));
       final quizWords = _pickRandom(tokenWords, min(4, tokenWords.length), rng);
+      // Each NPC in a level gets a different quiz-type rotation so the style
+      // changes between NPCs and across levels — but stays deterministic for
+      // replay (same seed → same order).
+      final typeOffset =
+          (seed + i * (QuizType.values.length + 1)) % QuizType.values.length;
       npcs.add(
         LevelNPC(
           worldX: npcX,
           name: npcNames[i % npcNames.length],
           greeting: npcGreetings[i % npcGreetings.length],
-          questions: _buildQuestions(quizWords, levelWords, rng),
+          questions: _buildQuestions(quizWords, levelWords, rng, typeOffset),
           npcId: (npcIdBase + i) % 16 + 1,
         ),
       );
@@ -119,14 +124,18 @@ class LevelGenerator {
     List<WordToken> quizWords,
     List<WordToken> allWords,
     Random rng,
+    int typeOffset,
   ) {
     final questions = <QuizQuestion>[];
     final types = QuizType.values;
     for (int i = 0; i < quizWords.length; i++) {
       final word = quizWords[i];
-      final type = types[i % types.length];
+      // Offset shifts the starting type so different NPCs/levels feel distinct
+      final type = types[(typeOffset + i) % types.length];
       questions.add(_makeQuestion(type, word, allWords, rng));
     }
+    // Shuffle so questions don't appear in a predictable type sequence
+    questions.shuffle(rng);
     return questions;
   }
 
