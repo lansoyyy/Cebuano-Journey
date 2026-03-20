@@ -13,6 +13,8 @@ class PlayerModel {
   final Map<String, int> levelStars;
   final int streakDays;
   final DateTime? lastPlayDate;
+  // ── Tutorial ──
+  final bool tutorialDone;
 
   const PlayerModel({
     required this.name,
@@ -27,6 +29,7 @@ class PlayerModel {
     this.levelStars = const {},
     this.streakDays = 0,
     this.lastPlayDate,
+    this.tutorialDone = false,
   });
 
   int get xpForNextLevel => (level * level * 150 + 100).clamp(100, 99999);
@@ -66,6 +69,7 @@ class PlayerModel {
     int? streakDays,
     DateTime? lastPlayDate,
     bool clearLastPlayDate = false,
+    bool? tutorialDone,
   }) =>
       PlayerModel(
         name: name ?? this.name,
@@ -81,5 +85,6 @@ class PlayerModel {
         streakDays: streakDays ?? this.streakDays,
         lastPlayDate:
             clearLastPlayDate ? null : (lastPlayDate ?? this.lastPlayDate),
+        tutorialDone: tutorialDone ?? this.tutorialDone,
       );
 }

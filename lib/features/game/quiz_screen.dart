@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../data/cebuano_words.dart';
 import '../../core/models/quiz_question.dart';
 import '../../core/providers/player_provider.dart';
 
@@ -35,6 +36,7 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
   bool _answered = false;
   String? _selected;
   bool _revealed = false; // for flashcard
+  bool _showExampleClue = false;
 
   // Fill blank
   final _fillCtrl = TextEditingController();
@@ -59,6 +61,7 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
     _answered = false;
     _selected = null;
     _revealed = false;
+    _showExampleClue = false;
     _fillCtrl.clear();
     _jumbleSelected = [];
     if (_q.type == QuizType.wordJumble) {
@@ -242,11 +245,139 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
     );
   }
 
+  CebuanoWord? _findClueWord() {
+    final normalizedCebuano = _q.cebuano.trim().toLowerCase();
+    for (final word in CebuanoWordsDatabase.words) {
+      if (word.cebuano.trim().toLowerCase() == normalizedCebuano) {
+        return word;
+      }
+    }
+
+    final normalizedEnglish = _q.english.trim().toLowerCase();
+    for (final word in CebuanoWordsDatabase.words) {
+      final english = word.english.trim().toLowerCase();
+      if (english == normalizedEnglish || english.contains(normalizedEnglish)) {
+        return word;
+      }
+    }
+    return null;
+  }
+
+  String? _clueTargetText() {
+    switch (_q.type) {
+      case QuizType.multipleChoice:
+      case QuizType.flashcard:
+        return _q.cebuano;
+      case QuizType.fillBlank:
+      case QuizType.wordJumble:
+        return _q.english;
+    }
+  }
+
+  Widget _buildExampleClue(Size size) {
+    final clueWord = _findClueWord();
+    final clueTarget = _clueTargetText();
+    final exampleSentence = clueWord?.exampleSentence;
+    final exampleTranslation = clueWord?.exampleTranslation;
+    if (clueTarget == null || exampleSentence == null || exampleSentence.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      children: [
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 220),
+          child: _showExampleClue
+              ? Container(
+                  key: const ValueKey('example-clue-open'),
+                  width: double.infinity,
+                  margin: EdgeInsets.only(bottom: size.height * 0.018),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0x221A6B1A),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.greenAccent.withOpacity(0.55)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Example sentence',
+                        style: TextStyle(
+                          color: Colors.greenAccent,
+                          fontSize: size.height * 0.022,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        exampleSentence,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: size.height * 0.029,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (exampleTranslation != null && exampleTranslation.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          exampleTranslation,
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: size.height * 0.022,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                )
+              : const SizedBox(key: ValueKey('example-clue-closed')),
+        ),
+        GestureDetector(
+          onTap: () => setState(() => _showExampleClue = !_showExampleClue),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0x221A3A5C),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: const Color(0xFF3A6EA5)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  clueTarget,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: const Color(0xFFFFD700),
+                    fontSize: size.height * 0.03,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _showExampleClue ? 'Tap to hide example sentence' : 'Tap to show example sentence',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: size.height * 0.02,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildQuestion(Size size) {
     switch (_q.type) {
       case QuizType.multipleChoice:
         return _MCWidget(
           question: _q,
+          clue: _buildExampleClue(size),
           answered: _answered,
           selected: _selected,
           onSelect: _submitAnswer,
@@ -255,6 +386,7 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
       case QuizType.fillBlank:
         return _FillWidget(
           question: _q,
+          clue: _buildExampleClue(size),
           ctrl: _fillCtrl,
           answered: _answered,
           selected: _selected,
@@ -264,6 +396,7 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
       case QuizType.wordJumble:
         return _JumbleWidget(
           question: _q,
+          clue: _buildExampleClue(size),
           selected: _jumbleSelected,
           pool: _jumblePool,
           answered: _answered,
@@ -315,7 +448,7 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
           child: Column(
             children: [
               Text(
-                isCorrect ? '✓  Husto! (Correct!)' : '✗  Mali! (Wrong!)',
+                isCorrect ? '✓  Sakto! (Correct!)' : '✗  Mali! (Wrong!)',
                 style: TextStyle(
                   color: isCorrect ? Colors.greenAccent : Colors.redAccent,
                   fontSize: size.height * 0.035,
@@ -364,6 +497,7 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
 // ── Multiple Choice ────────────────────────────────────────────────────────────
 class _MCWidget extends StatelessWidget {
   final QuizQuestion question;
+  final Widget clue;
   final bool answered;
   final String? selected;
   final void Function(String) onSelect;
@@ -371,6 +505,7 @@ class _MCWidget extends StatelessWidget {
 
   const _MCWidget({
     required this.question,
+    required this.clue,
     required this.answered,
     required this.selected,
     required this.onSelect,
@@ -381,6 +516,8 @@ class _MCWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
+        clue,
+        SizedBox(height: size.height * 0.02),
         Text(
           question.prompt,
           textAlign: TextAlign.center,
@@ -434,6 +571,7 @@ class _MCWidget extends StatelessWidget {
 // ── Fill in the Blank ─────────────────────────────────────────────────────────
 class _FillWidget extends StatelessWidget {
   final QuizQuestion question;
+  final Widget clue;
   final TextEditingController ctrl;
   final bool answered;
   final String? selected;
@@ -442,6 +580,7 @@ class _FillWidget extends StatelessWidget {
 
   const _FillWidget({
     required this.question,
+    required this.clue,
     required this.ctrl,
     required this.answered,
     required this.selected,
@@ -453,6 +592,8 @@ class _FillWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
+        clue,
+        SizedBox(height: size.height * 0.02),
         Text(
           question.prompt,
           textAlign: TextAlign.center,
@@ -503,6 +644,7 @@ class _FillWidget extends StatelessWidget {
 // ── Word Jumble ───────────────────────────────────────────────────────────────
 class _JumbleWidget extends StatelessWidget {
   final QuizQuestion question;
+  final Widget clue;
   final List<String> selected;
   final List<String> pool;
   final bool answered;
@@ -513,6 +655,7 @@ class _JumbleWidget extends StatelessWidget {
 
   const _JumbleWidget({
     required this.question,
+    required this.clue,
     required this.selected,
     required this.pool,
     required this.answered,
@@ -549,6 +692,8 @@ class _JumbleWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
+        clue,
+        SizedBox(height: size.height * 0.02),
         Text(
           question.prompt,
           textAlign: TextAlign.center,

@@ -4,11 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/level_data.dart';
 import '../../core/providers/player_provider.dart';
 import '../../data/level_generator.dart';
+import '../../data/level_intro_data.dart';
 import '../home/inventory_screen.dart';
 import '../home/main_menu_screen.dart';
 import '../home/options_screen.dart';
 import 'hud_overlay.dart';
 import 'level_end_screens.dart';
+import 'level_intro_screen.dart';
+import 'npc_dialogue_screen.dart';
 import 'parallax_painter.dart';
 import 'quiz_screen.dart';
 
@@ -51,7 +54,6 @@ class _GameScreenState extends ConsumerState<GameScreen>
   static const double _dashSpeed = 400.0;
 
   static const double _speed = 130.0;
-  static const double _sprintSpeed = 200.0;
   static const double _jumpImpulse = -300.0;
   static const double _gravity = 600.0;
 
@@ -90,8 +92,9 @@ class _GameScreenState extends ConsumerState<GameScreen>
   @override
   void initState() {
     super.initState();
-    _ticker = createTicker(_onTick)..start();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadLevel());
+    // Ticker is created but NOT started yet — it starts after the level intro.
+    _ticker = createTicker(_onTick);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _initLevel());
   }
 
   void _loadLevel() {
@@ -103,6 +106,28 @@ class _GameScreenState extends ConsumerState<GameScreen>
       groundY: size.height * 0.64,
     );
     setState(() => _levelData = data);
+  }
+
+  /// Load the level, optionally show a narrative intro, then start the ticker.
+  Future<void> _initLevel() async {
+    _loadLevel();
+    final intro = LevelIntroData.getIntro(widget.world, widget.level);
+    if (intro != null && mounted) {
+      await Navigator.push<void>(
+        context,
+        PageRouteBuilder<void>(
+          opaque: true,
+          pageBuilder: (_, __, ___) => LevelIntroScreen(narrative: intro),
+          transitionDuration: const Duration(milliseconds: 300),
+          transitionsBuilder: (_, anim, __, child) =>
+              FadeTransition(opacity: anim, child: child),
+        ),
+      );
+    }
+    if (mounted) {
+      _last = Duration.zero;
+      _ticker.start();
+    }
   }
 
   void _onTick(Duration elapsed) {
@@ -403,6 +428,28 @@ class _GameScreenState extends ConsumerState<GameScreen>
     final npc = _nearNPC!;
     _ticker.stop();
     setState(() => _inQuiz = true);
+
+    // Optional pre-quiz scripted dialogue
+    final npcIndex = _levelData!.npcs.indexOf(npc);
+    final preDialogue = LevelIntroData.getPreNPCDialogue(
+        widget.world, widget.level, npcIndex);
+    if (preDialogue != null && preDialogue.isNotEmpty && mounted) {
+      await Navigator.push<void>(
+        context,
+        PageRouteBuilder<void>(
+          opaque: true,
+          pageBuilder: (_, __, ___) => NpcDialogueScreen(
+            npcName: npc.name,
+            lines: preDialogue,
+          ),
+          transitionDuration: const Duration(milliseconds: 200),
+          transitionsBuilder: (_, anim, __, child) =>
+              FadeTransition(opacity: anim, child: child),
+        ),
+      );
+    }
+
+    if (!mounted) return;
     final result = await Navigator.push<QuizResult>(
       context,
       MaterialPageRoute(
@@ -731,7 +778,6 @@ class _PlatformPainter extends CustomPainter {
       // Add arrow indicator for moving platforms
       if (p.isMoving) {
         final arrowP = Paint()..color = Colors.white.withOpacity(0.5);
-        final arrowSize = 8.0;
         final centerX = sx + p.width / 2;
         final centerY = p.screenY - 20;
         // Draw left/right arrows

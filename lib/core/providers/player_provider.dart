@@ -14,6 +14,7 @@ const _kCoins = 'player_coins';
 const _kLevelStars = 'player_level_stars';
 const _kStreak = 'player_streak_days';
 const _kLastPlay = 'player_last_play_date';
+const _kTutorialDone = 'player_tutorial_done';
 
 class PlayerNotifier extends StateNotifier<PlayerModel> {
   PlayerNotifier() : super(const PlayerModel(name: ''));
@@ -37,6 +38,7 @@ class PlayerNotifier extends StateNotifier<PlayerModel> {
     final streakDays = prefs.getInt(_kStreak) ?? 0;
     final lastPlayRaw = prefs.getString(_kLastPlay);
     final lastPlayDate = lastPlayRaw != null ? DateTime.tryParse(lastPlayRaw) : null;
+    final tutorialDone = prefs.getBool(_kTutorialDone) ?? false;
 
     state = PlayerModel(
       name: name,
@@ -50,6 +52,7 @@ class PlayerNotifier extends StateNotifier<PlayerModel> {
       levelStars: levelStars,
       streakDays: streakDays,
       lastPlayDate: lastPlayDate,
+      tutorialDone: tutorialDone,
     );
   }
 
@@ -69,6 +72,7 @@ class PlayerNotifier extends StateNotifier<PlayerModel> {
     if (state.lastPlayDate != null) {
       await prefs.setString(_kLastPlay, state.lastPlayDate!.toIso8601String());
     }
+    await prefs.setBool(_kTutorialDone, state.tutorialDone);
   }
 
   Future<void> setName(String name) async {
@@ -116,6 +120,12 @@ class PlayerNotifier extends StateNotifier<PlayerModel> {
     final p = [...state.powerupCounts];
     p[0] = p[0] - 1;
     state = state.copyWith(powerupCounts: p);
+    await _save();
+  }
+
+  /// Mark the tutorial as completed and persist.
+  Future<void> completeTutorial() async {
+    state = state.copyWith(tutorialDone: true);
     await _save();
   }
 

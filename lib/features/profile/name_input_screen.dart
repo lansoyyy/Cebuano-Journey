@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/providers/player_provider.dart';
-import '../home/main_menu_screen.dart';
+import '../tutorial/tutorial_screen.dart';
 
 class NameInputScreen extends ConsumerStatefulWidget {
   const NameInputScreen({super.key});
@@ -26,9 +26,10 @@ class _NameInputScreenState extends ConsumerState<NameInputScreen> {
     setState(() => _loading = true);
     await ref.read(playerProvider.notifier).setName(name);
     if (mounted) {
+      // New players always see the tutorial before the main menu.
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const MainMenuScreen()),
+        MaterialPageRoute(builder: (_) => const TutorialScreen()),
       );
     }
   }

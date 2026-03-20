@@ -108,8 +108,8 @@ class CebuanoWordsDatabase {
       pronunciation: 'mah-YONG gah-BEE',
       category: WordCategory.greetings,
       difficulty: 1,
-      exampleSentence: 'Maayong gabii.',
-      exampleTranslation: 'Good evening.',
+      exampleSentence: 'Maayong gabii, gabii na nganong naa ka sa gawas.',
+      exampleTranslation: 'Good evening, it is already night, why are you still outside?',
     ),
     CebuanoWord(
       id: 'g5',
