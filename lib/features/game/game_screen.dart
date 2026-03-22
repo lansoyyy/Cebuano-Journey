@@ -84,6 +84,8 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
   // NPC proximity
   LevelNPC? _nearNPC;
+  bool _nearIntroSign = false;
+  bool _introSignRead = true;
 
   // Game session stats
   int _xpEarnedThisLevel = 0;
@@ -105,8 +107,16 @@ class _GameScreenState extends ConsumerState<GameScreen>
       screenWidth: size.width,
       groundY: size.height * 0.64,
     );
-    setState(() => _levelData = data);
+    setState(() {
+      _levelData = data;
+      _introSignRead = !_hasIntroSign;
+      _nearIntroSign = false;
+    });
   }
+
+  bool get _hasIntroSign => widget.world == 1 && widget.level == 1;
+
+  double _introSignWorldX(Size size) => size.width * 0.42;
 
   /// Load the level, optionally show a narrative intro, then start the ticker.
   Future<void> _initLevel() async {
@@ -206,9 +216,29 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
       _checkTokens();
       _checkHints();
+      _checkIntroSignProximity();
       _checkNPCProximity();
       _checkLevelComplete();
     });
+  }
+
+  void _checkIntroSignProximity() {
+    if (!_hasIntroSign || _levelData == null) {
+      _nearIntroSign = false;
+      return;
+    }
+
+    final size = MediaQuery.of(context).size;
+    final groundY = size.height * 0.64;
+    final charH =
+        size.height * 0.20 * (_isCrouching ? _crouchHeightMultiplier : 1.0);
+    final charY = groundY - charH + _jumpY;
+    final signScreenX = _introSignWorldX(size) - _worldX;
+    final charScreenX = size.width * 0.27;
+    final signY = groundY - size.height * 0.18;
+
+    _nearIntroSign =
+        (signScreenX - charScreenX).abs() < 90 && (signY - charY).abs() < 100;
   }
 
   void _checkTokens() {
@@ -350,51 +380,54 @@ class _GameScreenState extends ConsumerState<GameScreen>
       stars = 1;
     }
 
-    final prevStars = ref.read(playerProvider).starsFor(widget.world, widget.level);
+    final prevStars = ref
+        .read(playerProvider)
+        .starsFor(widget.world, widget.level);
 
     // Save result and get coins earned (async, fire-and-forget for nav purposes)
-    ref.read(playerProvider.notifier).saveLevelResult(widget.world, widget.level, stars).then((coinsEarned) {
-      if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => LevelCompleteScreen(
-            world: widget.world,
-            level: widget.level,
-            xpEarned: _xpEarnedThisLevel,
-            tokensCollected: tokensCollected,
-            totalTokens: totalTokens,
-            stars: stars,
-            prevBestStars: prevStars,
-            coinsEarned: coinsEarned,
-            onReplay: () => Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (_) => GameScreen(world: widget.world, level: widget.level),
+    final navigator = Navigator.of(context);
+    ref
+        .read(playerProvider.notifier)
+        .saveLevelResult(widget.world, widget.level, stars)
+        .then((coinsEarned) {
+          if (!mounted) return;
+          navigator.pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => LevelCompleteScreen(
+                world: widget.world,
+                level: widget.level,
+                xpEarned: _xpEarnedThisLevel,
+                tokensCollected: tokensCollected,
+                totalTokens: totalTokens,
+                stars: stars,
+                prevBestStars: prevStars,
+                coinsEarned: coinsEarned,
+                onReplay: () => navigator.pushReplacement(
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        GameScreen(world: widget.world, level: widget.level),
+                  ),
+                ),
+                onMenu: () => navigator.pushReplacement(
+                  MaterialPageRoute(builder: (_) => const MainMenuScreen()),
+                ),
+                onNext: () {
+                  int nw = widget.world;
+                  int nl = widget.level + 1;
+                  if (nl > 5) {
+                    nl = 1;
+                    nw++;
+                  }
+                  navigator.pushReplacement(
+                    MaterialPageRoute(
+                      builder: (_) => GameScreen(world: nw, level: nl),
+                    ),
+                  );
+                },
               ),
             ),
-            onMenu: () => Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const MainMenuScreen()),
-            ),
-            onNext: () {
-              int nw = widget.world;
-              int nl = widget.level + 1;
-              if (nl > 5) {
-                nl = 1;
-                nw++;
-              }
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => GameScreen(world: nw, level: nl),
-                ),
-              );
-            },
-          ),
-        ),
-      );
-    });
+          );
+        });
   }
 
   void _jump() {
@@ -424,7 +457,49 @@ class _GameScreenState extends ConsumerState<GameScreen>
   }
 
   Future<void> _interact() async {
-    if (_nearNPC == null || _inQuiz) return;
+    if (_inQuiz) return;
+
+    if (_hasIntroSign && _nearIntroSign) {
+      _ticker.stop();
+      setState(() => _inQuiz = true);
+      final signDialogue = LevelIntroData.getIntroSignDialogue(
+        widget.world,
+        widget.level,
+      );
+      if (signDialogue != null && mounted) {
+        await Navigator.push<void>(
+          context,
+          PageRouteBuilder<void>(
+            opaque: true,
+            pageBuilder: (_, __, ___) =>
+                NpcDialogueScreen(npcName: 'Intro Sign', lines: signDialogue),
+            transitionDuration: const Duration(milliseconds: 200),
+            transitionsBuilder: (_, anim, __, child) =>
+                FadeTransition(opacity: anim, child: child),
+          ),
+        );
+      }
+      if (!mounted) return;
+      _last = Duration.zero;
+      _ticker.start();
+      setState(() {
+        _introSignRead = true;
+        _inQuiz = false;
+      });
+      return;
+    }
+
+    if (_nearNPC == null) return;
+    if (_hasIntroSign && !_introSignRead) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Read the Introduction to Cebuano sign first.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
     final npc = _nearNPC!;
     _ticker.stop();
     setState(() => _inQuiz = true);
@@ -432,16 +507,17 @@ class _GameScreenState extends ConsumerState<GameScreen>
     // Optional pre-quiz scripted dialogue
     final npcIndex = _levelData!.npcs.indexOf(npc);
     final preDialogue = LevelIntroData.getPreNPCDialogue(
-        widget.world, widget.level, npcIndex);
+      widget.world,
+      widget.level,
+      npcIndex,
+    );
     if (preDialogue != null && preDialogue.isNotEmpty && mounted) {
       await Navigator.push<void>(
         context,
         PageRouteBuilder<void>(
           opaque: true,
-          pageBuilder: (_, __, ___) => NpcDialogueScreen(
-            npcName: npc.name,
-            lines: preDialogue,
-          ),
+          pageBuilder: (_, __, ___) =>
+              NpcDialogueScreen(npcName: npc.name, lines: preDialogue),
           transitionDuration: const Duration(milliseconds: 200),
           transitionsBuilder: (_, anim, __, child) =>
               FadeTransition(opacity: anim, child: child),
@@ -577,6 +653,18 @@ class _GameScreenState extends ConsumerState<GameScreen>
               );
             }),
 
+          // ── Intro sign ───────────────────────────────────────────────────
+          if (_hasIntroSign)
+            Positioned(
+              left: _introSignWorldX(size) - _worldX - size.height * 0.05,
+              top: groundY - size.height * 0.18,
+              child: _IntroSignWidget(
+                size: size,
+                isNear: _nearIntroSign,
+                isRead: _introSignRead,
+              ),
+            ),
+
           // ── Character sprite ─────────────────────────────────────────────
           Positioned(
             left: charScreenX - charW / 2,
@@ -605,7 +693,10 @@ class _GameScreenState extends ConsumerState<GameScreen>
             world: widget.world,
             level: widget.level,
             themeLabel: _levelData?.themeLabel ?? '',
-            showInteract: _nearNPC != null,
+            showInteract: _nearNPC != null || _nearIntroSign,
+            interactLabel: _nearIntroSign
+                ? 'Press  A  to read sign'
+                : 'Press  A  to talk',
             dashCooldown: _dashCooldown,
             isCrouching: _isCrouching,
             onInventory: () => Navigator.push(
@@ -842,6 +933,89 @@ class _HintWidget extends StatelessWidget {
         boxShadow: [BoxShadow(color: Color(0x884CAF50), blurRadius: 8)],
       ),
       child: const Icon(Icons.lightbulb, color: Colors.white, size: 18),
+    );
+  }
+}
+
+class _IntroSignWidget extends StatelessWidget {
+  final Size size;
+  final bool isNear;
+  final bool isRead;
+
+  const _IntroSignWidget({
+    required this.size,
+    required this.isNear,
+    required this.isRead,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = isRead ? const Color(0xFF90CAF9) : const Color(0xFFFFD700);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: const Color(0xCC0D1B3E),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: accent, width: 2),
+          ),
+          child: Text(
+            isRead ? 'Intro Sign' : 'Introduction to Cebuano',
+            style: TextStyle(
+              color: accent,
+              fontSize: size.height * 0.02,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          width: size.height * 0.08,
+          height: size.height * 0.11,
+          decoration: BoxDecoration(
+            color: const Color(0xFF8D6E63),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFF5D4037), width: 3),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.25),
+                blurRadius: 6,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Center(
+            child: Icon(
+              isNear ? Icons.menu_book_rounded : Icons.signpost_rounded,
+              color: Colors.white,
+              size: size.height * 0.05,
+            ),
+          ),
+        ),
+        if (!isRead)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Container(
+              width: size.height * 0.032,
+              height: size.height * 0.032,
+              decoration: const BoxDecoration(
+                color: Color(0xFFFFD700),
+                shape: BoxShape.circle,
+              ),
+              child: const Center(
+                child: Text(
+                  '!',
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
