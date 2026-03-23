@@ -331,26 +331,25 @@ class _GameScreenState extends ConsumerState<GameScreen>
   }
 
   void _showGameOver() {
-    Navigator.pushReplacement(
-      context,
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    navigator.pushReplacement(
       MaterialPageRoute(
         builder: (_) => GameOverScreen(
-          onMenu: () => Navigator.pushReplacement(
-            context,
+          onMenu: () => navigator.pushReplacement(
             MaterialPageRoute(builder: (_) => const MainMenuScreen()),
           ),
           onRetry: () {
             // Re-check hearts, if recovered, restart this level
             if (ref.read(playerProvider).currentHearts > 0) {
-              Navigator.pushReplacement(
-                context,
+              navigator.pushReplacement(
                 MaterialPageRoute(
                   builder: (_) =>
                       GameScreen(world: widget.world, level: widget.level),
                 ),
               );
             } else {
-              ScaffoldMessenger.of(context).showSnackBar(
+              messenger.showSnackBar(
                 const SnackBar(
                   content: Text('Still out of hearts! Wait a bit.'),
                 ),

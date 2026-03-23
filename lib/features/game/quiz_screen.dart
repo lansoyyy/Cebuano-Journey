@@ -116,6 +116,7 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
   void _submitGradedAnswer(String answer, bool correct) {
     if (_answered) return;
     _timer?.cancel();
+    FocusScope.of(context).unfocus();
     if (correct) _correct++;
     setState(() {
       _answered = true;
@@ -128,6 +129,7 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
   }
 
   void _next() {
+    FocusScope.of(context).unfocus();
     if (_index + 1 >= widget.questions.length) {
       final result = QuizResult(
         correct: _correct,
@@ -162,6 +164,7 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
     final player = ref.watch(playerProvider);
 
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -255,20 +258,43 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
                   ),
                 ),
 
-              const Spacer(),
-
-              // ── Question card ────────────────────────────────────────────
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: size.width * 0.04),
-                child: _buildQuestion(size),
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return SingleChildScrollView(
+                      padding: EdgeInsets.fromLTRB(
+                        size.width * 0.04,
+                        size.height * 0.03,
+                        size.width * 0.04,
+                        size.height * 0.03,
+                      ),
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minHeight: constraints.maxHeight - size.height * 0.02,
+                        ),
+                        child: Center(child: _buildQuestion(size)),
+                      ),
+                    );
+                  },
+                ),
               ),
 
-              const Spacer(),
-
               // ── Feedback / Next ──────────────────────────────────────────
-              if (_answered) _buildFeedback(size),
-
-              SizedBox(height: size.height * 0.02),
+              if (_answered)
+                SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      size.width * 0.04,
+                      size.height * 0.01,
+                      size.width * 0.04,
+                      size.height * 0.02,
+                    ),
+                    child: _buildFeedback(size),
+                  ),
+                )
+              else
+                SizedBox(height: size.height * 0.02),
             ],
           ),
         ),
@@ -562,8 +588,9 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFFFFD700),
             foregroundColor: Colors.black,
+            minimumSize: Size(size.width * 0.45, size.height * 0.075),
             padding: EdgeInsets.symmetric(
-              horizontal: size.width * 0.06,
+              horizontal: size.width * 0.08,
               vertical: size.height * 0.02,
             ),
             shape: RoundedRectangleBorder(
