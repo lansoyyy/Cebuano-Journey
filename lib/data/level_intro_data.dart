@@ -25,48 +25,48 @@ class LevelIntroData {
   // ── Level narrative intros ─────────────────────────────────────────────
   static const Map<String, LevelNarrative> _narratives = {
     '1_1': LevelNarrative(
-      title: 'World 1 · Street Food Market',
+      title: 'World 1 · Introduction to Cebuano',
       sceneSetting: 'Mercado district, Cebu City',
       mcThoughts: [
-        'I now have some ideas about the Cebuano language…',
-        "I'm feeling thirsty. Maybe I can try buying something at the street food stalls!",
-        'Let me collect some vocabulary first, then try to order.',
+        'This is my first real step into Cebuano.',
+        'Before I talk to anyone, I should learn what Cebuano is and how people use it every day.',
+        'There is a sign ahead. Maybe it has the introduction I need before the first quiz.',
       ],
     ),
     '1_2': LevelNarrative(
-      title: 'World 1 · Plaza Independencia',
-      sceneSetting: 'A sunny plaza near the clock tower',
+      title: 'World 1 · Counting at the Market',
+      sceneSetting: 'A busy stall with baskets, fruit, and price boards',
       mcThoughts: [
-        "I've been travelling for hours now…",
-        "I don't have a watch. I should ask someone what time it is.",
-        'But how do I ask that in Cebuano?',
+        'Now that I know a few Cebuano words, I need to count items and prices.',
+        'If I want to order properly, I should practice numbers first.',
+        'I hope the vendors here can help me count in Cebuano.',
       ],
     ),
     '1_3': LevelNarrative(
-      title: 'World 1 · Mactan Waterfront',
-      sceneSetting: 'By the Mactan Channel, coconut palms swaying',
+      title: 'World 1 · Ordering Food',
+      sceneSetting: 'Rows of barbecue stalls near the plaza',
       mcThoughts: [
-        "I'm doing great — but small talk is the next challenge.",
-        'I need to learn some conversational phrases.',
-        'Maybe someone here can help me practice!',
+        'I can count now, but ordering food is a different challenge.',
+        'I need to use short Cebuano phrases that feel natural in a real stall.',
+        'Maybe this level will teach me how to place a simple order.',
       ],
     ),
     '1_4': LevelNarrative(
-      title: 'World 1 · Sinulog Festival',
-      sceneSetting: 'Fuente Osmeña Boulevard — festival banners everywhere',
+      title: 'World 1 · Asking for the Time',
+      sceneSetting: 'A shaded plaza near a clock tower',
       mcThoughts: [
-        '"Viva Pit Señor!" — The energy here is unbelievable!',
-        'This must be the famous Sinulog festival.',
-        'I need to learn the festival words to join in!',
+        'I already know how to greet, count, and order a little.',
+        'The next useful skill is asking what time it is.',
+        'If I miss the time, I might miss my next ride too.',
       ],
     ),
     '1_5': LevelNarrative(
-      title: 'World 1 · Cebu Heritage District',
-      sceneSetting: 'Cobblestone streets near Magellan\'s Cross',
+      title: 'World 1 · Everyday Conversation',
+      sceneSetting: 'A relaxed street corner with locals chatting nearby',
       mcThoughts: [
-        'The history here is incredible…',
-        'Every corner tells a story.',
-        'I wonder what the locals call these places in Cebuano.',
+        'I have learned the basics. Now I need to answer naturally in conversation.',
+        'Short replies, matching words, and context clues will matter more now.',
+        'Let me see if I can keep up with a real Cebuano exchange.',
       ],
     ),
     '2_1': LevelNarrative(
@@ -82,159 +82,218 @@ class LevelIntroData {
 
   // ── NPC pre-quiz dialogue ──────────────────────────────────────────────
   // Key format: "${world}_${level}_${npcIndex}" (0-based NPC index in level)
+  static const List<NpcDialogueLine> _introSignDialogue = [
+    NpcDialogueLine(
+      isPlayer: false,
+      text:
+          '"Introduction to Cebuano: Cebuano, also called Bisaya or Binisaya, is one of the main languages spoken in Cebu and many parts of the Visayas and Mindanao."',
+    ),
+    NpcDialogueLine(
+      isPlayer: true,
+      text: '"So this is the language I need to learn here."',
+    ),
+    NpcDialogueLine(
+      isPlayer: false,
+      text:
+          '"Start with simple greetings, polite words, and everyday phrases. Talk to people, collect words, and use each quiz to practice in context."',
+    ),
+    NpcDialogueLine(
+      isPlayer: false,
+      text:
+          '"Tutorial: Move with the arrows, press B to jump, press X to dash, and press A to interact with signs and NPCs before taking quizzes."',
+    ),
+    NpcDialogueLine(
+      isPlayer: true,
+      text:
+          '"Got it. Read the sign, talk to the locals, then answer the quiz."',
+    ),
+  ];
+
   static const Map<String, List<NpcDialogueLine>> _preNPCDialogue = {
     // World 1, Level 1 ────────────────────────────────────────────────────
     '1_1_0': [
       NpcDialogueLine(
         isPlayer: false,
         text:
-            '"Huy! Come here, anak. I can see you\'re new here — let me test what you know!"',
+            '"Maayong buntag! Since this is your first day, let us start with greetings and polite Cebuano words you will hear all the time."',
       ),
       NpcDialogueLine(
         isPlayer: true,
-        text: '"Okay, I\'m ready. Let\'s try!"',
+        text: '"Perfect. I want to answer properly when I meet people here."',
       ),
     ],
     '1_1_1': [
       NpcDialogueLine(
         isPlayer: false,
         text:
-            '"Kumusta! You\'ve been collecting words, I see. Let\'s see how well you remember them."',
+            '"Kumusta! If someone greets you or says salamat, you should know how to respond. Let us practice those basics."',
       ),
       NpcDialogueLine(
         isPlayer: true,
-        text: '"Sure! I\'ve picked up quite a few along the way."',
+        text: '"Sige. I am ready for a few everyday Cebuano questions."',
       ),
     ],
     '1_1_2': [
       NpcDialogueLine(
         isPlayer: false,
         text:
-            '"Wow, you made it this far! Time for your final challenge in this area — are you ready?"',
+            '"One more round. Think of this as your first real conversation checkpoint before moving deeper into Cebu."',
       ),
       NpcDialogueLine(
         isPlayer: true,
-        text: '"I can do it! Kaya nako!"',
+        text: '"Kaya nako! Let me show that I understand the basics."',
       ),
     ],
 
-    // World 1, Level 2 — Asking the time ─────────────────────────────────
+    // World 1, Level 2 — Numbers and counting ─────────────────────────────
     '1_2_0': [
       NpcDialogueLine(
         isPlayer: false,
         text:
-            '"You look a bit lost, friend! Are you trying to find out the time?"',
+            '"If you want to order in the market, you need numbers first. How many bananas? How much water? Let us count in Cebuano."',
       ),
       NpcDialogueLine(
         isPlayer: true,
-        text: '"Yes! But… how do I ask in Cebuano?"',
+        text:
+            '"That makes sense. I should learn the numbers before I buy anything."',
       ),
       NpcDialogueLine(
         isPlayer: false,
-        text:
-            '"I can help you with that — but first, answer a few questions for me!"',
+        text: '"Exactly. Answer these first, then ordering will feel easier."',
       ),
     ],
     '1_2_1': [
       NpcDialogueLine(
         isPlayer: false,
         text:
-            '"Oy! Pagal ka na? Pila na ka oras? — Tired already? What time is it?"',
+            '"A customer might say duha ka tubig or tulo ka puso. You need to catch the number right away."',
       ),
       NpcDialogueLine(
         isPlayer: true,
-        text: '"Ha, I\'m not sure… Let\'s figure this out together!"',
+        text: '"Okay. I will listen carefully and count in Cebuano."',
       ),
     ],
     '1_2_2': [
       NpcDialogueLine(
         isPlayer: false,
         text:
-            '"You\'ve learned how to ask the time — impressive! One last quiz before you go."',
+            '"Last round for numbers. Once you pass this, you can start building small ordering phrases too."',
       ),
-      NpcDialogueLine(
-        isPlayer: true,
-        text: '"Bring it on! Andam na ko!"',
-      ),
+      NpcDialogueLine(isPlayer: true, text: '"Andam na ko. Let us count!"'),
     ],
 
-    // World 1, Level 3 — Small talk ───────────────────────────────────────
+    // World 1, Level 3 — Ordering food ────────────────────────────────────
     '1_3_0': [
       NpcDialogueLine(
         isPlayer: false,
         text:
-            '"Hoy! Diin ka gikan? — Hey, where are you from? You\'re not local, are you?"',
+            '"Hungry? Good. This is the best time to practice ordering. Listen to the food words and short request phrases."',
       ),
       NpcDialogueLine(
         isPlayer: true,
-        text: '"Ha! I\'m just visiting. Nice to meet you!"',
+        text: '"Yes. I want to ask for food without sounding lost."',
       ),
       NpcDialogueLine(
         isPlayer: false,
         text:
-            '"Well then, let\'s have a little chat! I\'ll start you off with some questions."',
+            '"Then answer these first. They are the same kinds of words you will use at the stall."',
       ),
     ],
     '1_3_1': [
       NpcDialogueLine(
         isPlayer: false,
         text:
-            '"Kumusta ka? — How are you? Small talk is important in Cebuano culture. Let me quiz you!"',
+            '"Try to picture a real order: please, water, rice, fish. The quiz will sound more natural if you imagine that scene."',
       ),
       NpcDialogueLine(
         isPlayer: true,
-        text: '"Maayo ko! I\'m good — I think!"',
+        text: '"Sige. I will think like I am already ordering dinner."',
       ),
     ],
     '1_3_2': [
       NpcDialogueLine(
         isPlayer: false,
         text:
-            '"You\'re almost a local now, haha! Last challenge for this area — show me what you\'ve got."',
+            '"Final order check. Put the words together the way a customer would say them."',
       ),
       NpcDialogueLine(
         isPlayer: true,
-        text: '"Sige! Let\'s do it!"',
+        text: '"Palihug, one more quiz. I am ready."',
       ),
     ],
 
-    // World 1, Level 4 — Sinulog Festival ─────────────────────────────────
+    // World 1, Level 4 — Asking the time ─────────────────────────────────
     '1_4_0': [
       NpcDialogueLine(
         isPlayer: false,
         text:
-            '"Welcome to the Grand Sinulog Procession! Every chant of \'Pit Señor\' is a prayer of gratitude."',
+            '"You have the basics now. Next, learn how to ask for the time and understand time-related clues in Cebuano."',
       ),
       NpcDialogueLine(
         isPlayer: true,
-        text: '"This is amazing! Teach me the festival words!"',
+        text: '"Right. If I miss the time, I miss the plan."',
       ),
       NpcDialogueLine(
         isPlayer: false,
         text:
-            '"Of course! First — let\'s see if you can handle a festival quiz. ¡Viva Pit Señor!"',
+            '"Then let me test you with time words, quick responses, and useful phrases."',
       ),
     ],
     '1_4_1': [
       NpcDialogueLine(
         isPlayer: false,
         text:
-            '"The procession is moving! Keep up — and answer my questions as we march."',
+            '"When someone says a time expression, answer clearly and quickly. That is what this round is for."',
       ),
       NpcDialogueLine(
         isPlayer: true,
-        text: '"I can march and quiz at the same time — challenge accepted!"',
+        text: '"Okay. I will treat this like a real question on the street."',
       ),
     ],
     '1_4_2': [
       NpcDialogueLine(
         isPlayer: false,
         text:
-            '"You\'ve almost learned all the Sinulog vocabulary. Final round — make Cebu proud!"',
+            '"One last timing challenge. After this, you should be able to ask and respond with more confidence."',
       ),
       NpcDialogueLine(
         isPlayer: true,
-        text: '"Pit Señor! Here we go!"',
+        text: '"Here we go. Unsa na orasa? I am ready to learn."',
+      ),
+    ],
+
+    // World 1, Level 5 — Conversation and matching ──────────────────────
+    '1_5_0': [
+      NpcDialogueLine(
+        isPlayer: false,
+        text:
+            '"Now we go beyond single words. Listen to the situation and choose the most natural response."',
+      ),
+      NpcDialogueLine(
+        isPlayer: true,
+        text: '"So this round is more like a real conversation."',
+      ),
+    ],
+    '1_5_1': [
+      NpcDialogueLine(
+        isPlayer: false,
+        text:
+            '"Some questions will ask you to match Cebuano words with their meanings. Think fast and connect them correctly."',
+      ),
+      NpcDialogueLine(
+        isPlayer: true,
+        text: '"Got it. I need to understand, not just memorize."',
+      ),
+    ],
+    '1_5_2': [
+      NpcDialogueLine(
+        isPlayer: false,
+        text:
+            '"Final checkpoint. A little conversation, a little matching, and a little confidence."',
+      ),
+      NpcDialogueLine(
+        isPlayer: true,
+        text: '"Maayo. Let me finish World 1 strong."',
       ),
     ],
   };
@@ -243,8 +302,18 @@ class LevelIntroData {
   static LevelNarrative? getIntro(int world, int level) =>
       _narratives['${world}_$level'];
 
+  /// Returns the intro sign dialogue shown before the first level quiz.
+  static List<NpcDialogueLine>? getIntroSignDialogue(int world, int level) {
+    if (world == 1 && level == 1) {
+      return _introSignDialogue;
+    }
+    return null;
+  }
+
   /// Returns the pre-quiz NPC dialogue for the specified NPC, or null.
   static List<NpcDialogueLine>? getPreNPCDialogue(
-      int world, int level, int npcIndex) =>
-      _preNPCDialogue['${world}_${level}_$npcIndex'];
+    int world,
+    int level,
+    int npcIndex,
+  ) => _preNPCDialogue['${world}_${level}_$npcIndex'];
 }

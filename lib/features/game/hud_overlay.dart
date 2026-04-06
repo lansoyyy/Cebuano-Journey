@@ -10,6 +10,7 @@ class HudOverlay extends StatefulWidget {
   final int level;
   final String themeLabel;
   final bool showInteract;
+  final String interactLabel;
   final int? timerSeconds;
   final VoidCallback onInventory;
   final double? dashCooldown;
@@ -24,6 +25,7 @@ class HudOverlay extends StatefulWidget {
     required this.level,
     required this.themeLabel,
     required this.showInteract,
+    required this.interactLabel,
     required this.onInventory,
     this.timerSeconds,
     this.dashCooldown,
@@ -295,7 +297,7 @@ class _HudOverlayState extends State<HudOverlay> {
                   border: Border.all(color: const Color(0xFFFFD700), width: 2),
                 ),
                 child: Text(
-                  'Press  A  to talk',
+                  widget.interactLabel,
                   style: TextStyle(
                     color: const Color(0xFFFFD700),
                     fontSize: size.height * 0.032,

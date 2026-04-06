@@ -8,7 +8,7 @@ import '../../core/providers/player_provider.dart';
 
 // ── EXP-based quiz system constants ─────────────────────────────────────────
 const int _kStartExp = 100;
-const int _kExpPerWrong = 10;   // EXP deducted per wrong answer per round
+const int _kExpPerWrong = 10; // EXP deducted per wrong answer per round
 const int _kMaxRetryRounds = 3;
 const int _kPassThreshold = 70;
 
@@ -47,17 +47,19 @@ class QuizScreen extends ConsumerStatefulWidget {
 class _QuizScreenState extends ConsumerState<QuizScreen> {
   // \u2500\u2500\u2500 EXP / round state \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
   int _exp = _kStartExp;
-  int _retryRound = 0;                   // 0 = initial, 1\u20133 = retry rounds
+  int _retryRound = 0; // 0 = initial, 1\u20133 = retry rounds
   late List<QuizQuestion> _roundQuestions; // current round\u2019s questions
-  List<QuizQuestion> _wrongQuestions = []; // questions answered wrong this round
-  int _totalCorrect = 0;                 // first-time correct count (for display)
+  List<QuizQuestion> _wrongQuestions =
+      []; // questions answered wrong this round
+  int _totalCorrect = 0; // first-time correct count (for display)
   _Phase _phase = _Phase.answering;
 
   // \u2500\u2500\u2500 Per-question state \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
   int _index = 0;
   bool _answered = false;
   String? _selected;
-  bool _revealed = false;
+  bool _wasCorrect = false;
+  bool _revealed = false; // for flashcard
   bool _showExampleClue = false;
 
   // Fill blank
@@ -66,6 +68,10 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
   // Word jumble
   List<String> _jumbleSelected = [];
   List<String> _jumblePool = [];
+
+  // Word match
+  final Map<int, String> _matchSelections = {};
+  List<String> _matchPool = [];
 
   // Timer
   int _timeLeft = 30;
@@ -100,22 +106,26 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
     });
     _fillCtrl.clear();
     _jumbleSelected = [];
-    _jumblePool =
-        shuffled.isNotEmpty && shuffled[0].type == QuizType.wordJumble
-            ? [...shuffled[0].options]
-            : [];
+    _jumblePool = shuffled.isNotEmpty && shuffled[0].type == QuizType.wordJumble
+        ? [...shuffled[0].options]
+        : [];
     _startTimer();
   }
 
   void _initQuestion() {
     _answered = false;
     _selected = null;
+    _wasCorrect = false;
     _revealed = false;
     _showExampleClue = false;
     _fillCtrl.clear();
     _jumbleSelected = [];
+    _matchSelections.clear();
     if (_q.type == QuizType.wordJumble) {
       _jumblePool = [..._q.options];
+    }
+    if (_q.type == QuizType.wordMatch) {
+      _matchPool = [..._q.matchTargets]..shuffle();
     }
     _startTimer();
   }
@@ -124,7 +134,10 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
     _timer?.cancel();
     _timeLeft = 30;
     _timer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (!mounted) { t.cancel(); return; }
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
       setState(() {
         _timeLeft--;
         if (_timeLeft <= 0) {
@@ -145,12 +158,18 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
   void _submitAnswer(String answer) {
     if (_answered) return;
     _timer?.cancel();
-    final isCorrect = answer.trim().toLowerCase() ==
-        _q.correctAnswer.trim().toLowerCase();
-    if (isCorrect) {
+    final correct =
+        answer.trim().toLowerCase() == _q.correctAnswer.trim().toLowerCase();
+    _submitGradedAnswer(answer, correct);
+  }
+
+  void _submitGradedAnswer(String answer, bool correct) {
+    if (_answered) return;
+    _timer?.cancel();
+    FocusScope.of(context).unfocus();
+    if (correct) {
       if (_retryRound == 0) _totalCorrect++;
     } else {
-      // Deduct EXP and record for potential retry round
       _exp = (_exp - _kExpPerWrong).clamp(0, _kStartExp);
       _wrongQuestions.add(_q);
       ref.read(playerProvider.notifier).loseHeart();
@@ -158,10 +177,12 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
     setState(() {
       _answered = true;
       _selected = answer;
+      _wasCorrect = correct;
     });
   }
 
   void _next() {
+    FocusScope.of(context).unfocus();
     if (_index + 1 < _roundQuestions.length) {
       setState(() => _index++);
       _initQuestion();
@@ -215,11 +236,13 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
     final player = ref.read(playerProvider);
     if (player.hintCount <= 0) return;
     ref.read(playerProvider.notifier).useHint();
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text('Hint: ${_q.hint}'),
-      backgroundColor: const Color(0xFF2A4A2A),
-      duration: const Duration(seconds: 4),
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Hint: ${_q.hint}'),
+        backgroundColor: const Color(0xFF2A4A2A),
+        duration: const Duration(seconds: 4),
+      ),
+    );
   }
 
   @override
@@ -240,6 +263,7 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
     final player = ref.watch(playerProvider);
 
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -284,7 +308,9 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
                     // EXP live indicator
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: _exp >= _kPassThreshold
                             ? const Color(0xFF1A4A1A)
@@ -312,14 +338,17 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
                     Text(
                       '${_index + 1}/${_roundQuestions.length}',
                       style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: size.height * 0.03),
+                        color: Colors.white70,
+                        fontSize: size.height * 0.03,
+                      ),
                     ),
                     SizedBox(width: size.width * 0.02),
                     // Timer
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 4),
+                        horizontal: 12,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: _timeLeft <= 5
                             ? Colors.red.shade900
@@ -340,9 +369,11 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
                     if (player.hintCount > 0)
                       IconButton(
                         onPressed: _answered ? null : _useHint,
-                        icon: Icon(Icons.lightbulb,
-                            color: const Color(0xFFFFD700),
-                            size: size.height * 0.04),
+                        icon: Icon(
+                          Icons.lightbulb,
+                          color: const Color(0xFFFFD700),
+                          size: size.height * 0.04,
+                        ),
                       ),
                   ],
                 ),
@@ -362,26 +393,50 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
                     child: Text(
                       widget.npcGreeting,
                       style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: size.height * 0.028),
+                        color: Colors.white70,
+                        fontSize: size.height * 0.028,
+                      ),
                     ),
                   ),
                 ),
 
-              const Spacer(),
-
-              // ── Question card ────────────────────────────────────────────
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: size.width * 0.04),
-                child: _buildQuestion(size),
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return SingleChildScrollView(
+                      padding: EdgeInsets.fromLTRB(
+                        size.width * 0.04,
+                        size.height * 0.03,
+                        size.width * 0.04,
+                        size.height * 0.03,
+                      ),
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minHeight: constraints.maxHeight - size.height * 0.02,
+                        ),
+                        child: Center(child: _buildQuestion(size)),
+                      ),
+                    );
+                  },
+                ),
               ),
 
-              const Spacer(),
-
               // ── Feedback / Next ──────────────────────────────────────────
-              if (_answered) _buildFeedback(size),
-
-              SizedBox(height: size.height * 0.02),
+              if (_answered)
+                SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      size.width * 0.04,
+                      size.height * 0.01,
+                      size.width * 0.04,
+                      size.height * 0.02,
+                    ),
+                    child: _buildFeedback(size),
+                  ),
+                )
+              else
+                SizedBox(height: size.height * 0.02),
             ],
           ),
         ),
@@ -414,6 +469,8 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
         return _q.cebuano;
       case QuizType.fillBlank:
       case QuizType.wordJumble:
+      case QuizType.conversation:
+      case QuizType.wordMatch:
         return _q.english;
     }
   }
@@ -423,7 +480,9 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
     final clueTarget = _clueTargetText();
     final exampleSentence = clueWord?.exampleSentence;
     final exampleTranslation = clueWord?.exampleTranslation;
-    if (clueTarget == null || exampleSentence == null || exampleSentence.isEmpty) {
+    if (clueTarget == null ||
+        exampleSentence == null ||
+        exampleSentence.isEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -440,7 +499,9 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
                   decoration: BoxDecoration(
                     color: const Color(0x221A6B1A),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.greenAccent.withOpacity(0.55)),
+                    border: Border.all(
+                      color: Colors.greenAccent.withOpacity(0.55),
+                    ),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -462,7 +523,8 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      if (exampleTranslation != null && exampleTranslation.isNotEmpty) ...[
+                      if (exampleTranslation != null &&
+                          exampleTranslation.isNotEmpty) ...[
                         const SizedBox(height: 4),
                         Text(
                           exampleTranslation,
@@ -501,7 +563,9 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  _showExampleClue ? 'Tap to hide example sentence' : 'Tap to show example sentence',
+                  _showExampleClue
+                      ? 'Tap to hide example sentence'
+                      : 'Tap to show example sentence',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Colors.white70,
@@ -558,7 +622,9 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
               _jumbleSelected.removeAt(i);
             });
           },
-          onSubmit: () => _submitAnswer(_jumbleSelected.join('')),
+          onSubmit: () => _submitAnswer(
+            _jumbleSelected.join(_q.useSpacesInJumble ? ' ' : ''),
+          ),
           size: size,
         );
       case QuizType.flashcard:
@@ -566,51 +632,93 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
           question: _q,
           revealed: _revealed,
           onReveal: () => setState(() => _revealed = true),
-          onKnew: () => _submitAnswer(_q.correctAnswer),
-          onDidnt: () => _submitAnswer('__wrong__'),
+          onKnew: () => _submitGradedAnswer(_q.correctAnswer, true),
+          onDidnt: () => _submitGradedAnswer('__wrong__', false),
+          size: size,
+        );
+      case QuizType.conversation:
+        return _ConversationWidget(
+          question: _q,
+          clue: _buildExampleClue(size),
+          answered: _answered,
+          selected: _selected,
+          onSelect: _submitAnswer,
+          size: size,
+        );
+      case QuizType.wordMatch:
+        return _WordMatchWidget(
+          question: _q,
+          clue: _buildExampleClue(size),
+          answered: _answered,
+          pool: _matchPool,
+          selections: _matchSelections,
+          onChanged: (index, value) {
+            setState(() {
+              if (value == null || value.isEmpty) {
+                _matchSelections.remove(index);
+              } else {
+                _matchSelections[index] = value;
+              }
+            });
+          },
+          onSubmit: () {
+            final summary = List.generate(
+              _q.options.length,
+              (i) => '${_q.options[i]} = ${_matchSelections[i] ?? '-'}',
+            ).join('\n');
+            final correct = List.generate(
+              _q.options.length,
+              (i) => _matchSelections[i] == _q.matchTargets[i],
+            ).every((value) => value);
+            _submitGradedAnswer(summary, correct);
+          },
           size: size,
         );
     }
   }
 
   Widget _buildFeedback(Size size) {
-    final isCorrect = _selected?.trim().toLowerCase() ==
-        _q.correctAnswer.trim().toLowerCase();
     return Column(
       children: [
         Container(
           margin: EdgeInsets.symmetric(horizontal: size.width * 0.04),
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: isCorrect
+            color: _wasCorrect
                 ? const Color(0xFF1A4A1A)
                 : const Color(0xFF4A1A1A),
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-                color: isCorrect ? Colors.green : Colors.red, width: 2),
+              color: _wasCorrect ? Colors.green : Colors.red,
+              width: 2,
+            ),
           ),
           child: Column(
             children: [
               Text(
-                isCorrect ? '✓  Sakto! (Correct!)' : '✗  Mali! (Wrong!)',
+                _wasCorrect ? '✓  Sakto! (Correct!)' : '✗  Mali! (Wrong!)',
                 style: TextStyle(
-                  color: isCorrect ? Colors.greenAccent : Colors.redAccent,
+                  color: _wasCorrect ? Colors.greenAccent : Colors.redAccent,
                   fontSize: size.height * 0.035,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              if (!isCorrect) ...[
+              if (!_wasCorrect) ...[
                 const SizedBox(height: 4),
                 Text(
                   'Answer: ${_q.correctAnswer}',
                   style: TextStyle(
-                      color: Colors.white70, fontSize: size.height * 0.028),
+                    color: Colors.white70,
+                    fontSize: size.height * 0.028,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'Tip: ${_q.hint}',
                   style: TextStyle(
-                      color: Colors.amber, fontSize: size.height * 0.025),
+                    color: Colors.amber,
+                    fontSize: size.height * 0.025,
+                  ),
                 ),
               ],
             ],
@@ -622,15 +730,21 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFFFFD700),
             foregroundColor: Colors.black,
+            minimumSize: Size(size.width * 0.45, size.height * 0.075),
             padding: EdgeInsets.symmetric(
-                horizontal: size.width * 0.06, vertical: size.height * 0.02),
+              horizontal: size.width * 0.08,
+              vertical: size.height * 0.02,
+            ),
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10)),
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
           child: Text(
             _index + 1 >= _roundQuestions.length ? 'Finish Round' : 'Next  →',
             style: TextStyle(
-                fontSize: size.height * 0.032, fontWeight: FontWeight.bold),
+              fontSize: size.height * 0.032,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
       ],
@@ -657,9 +771,11 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.loop,
-                      color: Colors.orangeAccent,
-                      size: size.height * 0.10),
+                  Icon(
+                    Icons.loop,
+                    color: Colors.orangeAccent,
+                    size: size.height * 0.10,
+                  ),
                   SizedBox(height: size.height * 0.03),
                   Text(
                     'LOOP ACTIVATED!',
@@ -675,18 +791,24 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
                     'You had $wrongCount incorrect answer${wrongCount == 1 ? '' : 's'}.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                        color: Colors.white, fontSize: size.height * 0.035),
+                      color: Colors.white,
+                      fontSize: size.height * 0.035,
+                    ),
                   ),
                   SizedBox(height: size.height * 0.01),
                   Text(
                     'Retry Round $nextRound\u00a0/\u00a0$_kMaxRetryRounds',
                     style: TextStyle(
-                        color: Colors.white70, fontSize: size.height * 0.030),
+                      color: Colors.white70,
+                      fontSize: size.height * 0.030,
+                    ),
                   ),
                   SizedBox(height: size.height * 0.02),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 10),
+                      horizontal: 20,
+                      vertical: 10,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.black26,
                       borderRadius: BorderRadius.circular(10),
@@ -726,8 +848,9 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
                     'You need $_kPassThreshold EXP to pass.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                        color: Colors.white54,
-                        fontSize: size.height * 0.026),
+                      color: Colors.white54,
+                      fontSize: size.height * 0.026,
+                    ),
                   ),
                   SizedBox(height: size.height * 0.05),
                   ElevatedButton(
@@ -740,7 +863,8 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
                         vertical: size.height * 0.022,
                       ),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                     child: Text(
                       'Try Again',
@@ -781,12 +905,8 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(
-                    passed
-                        ? Icons.emoji_events
-                        : Icons.sentiment_dissatisfied,
-                    color: passed
-                        ? const Color(0xFFFFD700)
-                        : Colors.redAccent,
+                    passed ? Icons.emoji_events : Icons.sentiment_dissatisfied,
+                    color: passed ? const Color(0xFFFFD700) : Colors.redAccent,
                     size: size.height * 0.10,
                   ),
                   SizedBox(height: size.height * 0.025),
@@ -819,8 +939,9 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
                         Text(
                           'Final EXP',
                           style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: size.height * 0.028),
+                            color: Colors.white70,
+                            fontSize: size.height * 0.028,
+                          ),
                         ),
                         SizedBox(height: size.height * 0.01),
                         Text(
@@ -848,7 +969,7 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
                           passed
                               ? 'Required: $_kPassThreshold EXP  \u2713'
                               : 'Required: $_kPassThreshold EXP  '
-                                  '(Need ${_kPassThreshold - _exp} more)',
+                                    '(Need ${_kPassThreshold - _exp} more)',
                           style: TextStyle(
                             color: passed
                                 ? Colors.greenAccent
@@ -871,7 +992,8 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
                           vertical: size.height * 0.022,
                         ),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                       child: Text(
                         'Proceed  \u2192',
@@ -886,8 +1008,9 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
                       'You did not reach the required EXP.\nChoose an option:',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: size.height * 0.028),
+                        color: Colors.white70,
+                        fontSize: size.height * 0.028,
+                      ),
                     ),
                     SizedBox(height: size.height * 0.03),
                     Row(
@@ -903,7 +1026,8 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
                               vertical: size.height * 0.02,
                             ),
                             shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
                           child: Text(
                             '\u21ba  Restart',
@@ -924,7 +1048,8 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
                               vertical: size.height * 0.02,
                             ),
                             shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
                           child: Text(
                             'End',
@@ -975,9 +1100,10 @@ class _MCWidget extends StatelessWidget {
           question.prompt,
           textAlign: TextAlign.center,
           style: TextStyle(
-              color: Colors.white,
-              fontSize: size.height * 0.038,
-              fontWeight: FontWeight.bold),
+            color: Colors.white,
+            fontSize: size.height * 0.038,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         SizedBox(height: size.height * 0.03),
         Wrap(
@@ -1010,7 +1136,9 @@ class _MCWidget extends StatelessWidget {
                   opt,
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                      color: Colors.white, fontSize: size.height * 0.030),
+                    color: Colors.white,
+                    fontSize: size.height * 0.030,
+                  ),
                 ),
               ),
             );
@@ -1051,9 +1179,10 @@ class _FillWidget extends StatelessWidget {
           question.prompt,
           textAlign: TextAlign.center,
           style: TextStyle(
-              color: Colors.white,
-              fontSize: size.height * 0.038,
-              fontWeight: FontWeight.bold),
+            color: Colors.white,
+            fontSize: size.height * 0.038,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         SizedBox(height: size.height * 0.04),
         TextField(
@@ -1123,19 +1252,22 @@ class _JumbleWidget extends StatelessWidget {
       onTap: onTap,
       child: Container(
         margin: const EdgeInsets.all(3),
-        width: 38,
-        height: 42,
+        constraints: const BoxConstraints(minWidth: 38, minHeight: 42),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
         decoration: BoxDecoration(
           color: color,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(color: Colors.white24),
         ),
         child: Center(
-          child: Text(ch,
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18)),
+          child: Text(
+            ch,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+            ),
+          ),
         ),
       ),
     );
@@ -1151,9 +1283,10 @@ class _JumbleWidget extends StatelessWidget {
           question.prompt,
           textAlign: TextAlign.center,
           style: TextStyle(
-              color: Colors.white,
-              fontSize: size.height * 0.034,
-              fontWeight: FontWeight.bold),
+            color: Colors.white,
+            fontSize: size.height * 0.034,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         SizedBox(height: size.height * 0.025),
         // Selected row
@@ -1169,11 +1302,16 @@ class _JumbleWidget extends StatelessWidget {
             alignment: WrapAlignment.center,
             children: [
               for (int i = 0; i < selected.length; i++)
-                _letterTile(selected[i], () => onTapSelected(i),
-                    const Color(0xFF2A5A8A)),
+                _letterTile(
+                  selected[i],
+                  () => onTapSelected(i),
+                  const Color(0xFF2A5A8A),
+                ),
               if (selected.isEmpty)
-                const Text('Tap letters below...',
-                    style: TextStyle(color: Colors.white38)),
+                const Text(
+                  'Tap letters below...',
+                  style: TextStyle(color: Colors.white38),
+                ),
             ],
           ),
         ),
@@ -1183,8 +1321,7 @@ class _JumbleWidget extends StatelessWidget {
           alignment: WrapAlignment.center,
           children: [
             for (int i = 0; i < pool.length; i++)
-              _letterTile(
-                  pool[i], () => onTapPool(i), const Color(0xFF1A3A5C)),
+              _letterTile(pool[i], () => onTapPool(i), const Color(0xFF1A3A5C)),
           ],
         ),
         SizedBox(height: size.height * 0.02),
@@ -1192,8 +1329,222 @@ class _JumbleWidget extends StatelessWidget {
           ElevatedButton(
             onPressed: selected.isEmpty ? null : onSubmit,
             style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF3A6EA5)),
+              backgroundColor: const Color(0xFF3A6EA5),
+            ),
             child: const Text('Submit', style: TextStyle(color: Colors.white)),
+          ),
+      ],
+    );
+  }
+}
+
+class _ConversationWidget extends StatelessWidget {
+  final QuizQuestion question;
+  final Widget clue;
+  final bool answered;
+  final String? selected;
+  final void Function(String) onSelect;
+  final Size size;
+
+  const _ConversationWidget({
+    required this.question,
+    required this.clue,
+    required this.answered,
+    required this.selected,
+    required this.onSelect,
+    required this.size,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        clue,
+        SizedBox(height: size.height * 0.02),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0x221A3A5C),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.white24),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Conversation',
+                style: TextStyle(
+                  color: const Color(0xFFFFD700),
+                  fontSize: size.height * 0.024,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                question.prompt,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: size.height * 0.031,
+                  fontWeight: FontWeight.w600,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(height: size.height * 0.025),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          alignment: WrapAlignment.center,
+          children: question.options.map((opt) {
+            var bg = const Color(0xFF1A3A5C);
+            var border = Colors.white24;
+            if (answered) {
+              if (opt == question.correctAnswer) {
+                bg = const Color(0xFF1A4A1A);
+                border = Colors.green;
+              } else if (opt == selected) {
+                bg = const Color(0xFF4A1A1A);
+                border = Colors.red;
+              }
+            }
+            return GestureDetector(
+              onTap: answered ? null : () => onSelect(opt),
+              child: Container(
+                width: size.width * 0.34,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: bg,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: border, width: 2),
+                ),
+                child: Text(
+                  opt,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: size.height * 0.027,
+                    height: 1.35,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+}
+
+class _WordMatchWidget extends StatelessWidget {
+  final QuizQuestion question;
+  final Widget clue;
+  final bool answered;
+  final List<String> pool;
+  final Map<int, String> selections;
+  final void Function(int, String?) onChanged;
+  final VoidCallback onSubmit;
+  final Size size;
+
+  const _WordMatchWidget({
+    required this.question,
+    required this.clue,
+    required this.answered,
+    required this.pool,
+    required this.selections,
+    required this.onChanged,
+    required this.onSubmit,
+    required this.size,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final ready = selections.length == question.options.length;
+    return Column(
+      children: [
+        clue,
+        SizedBox(height: size.height * 0.02),
+        Text(
+          question.prompt,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: size.height * 0.036,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        SizedBox(height: size.height * 0.025),
+        ...List.generate(question.options.length, (index) {
+          return Container(
+            margin: EdgeInsets.only(bottom: size.height * 0.015),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0x221A3A5C),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white24),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    question.options[index],
+                    style: TextStyle(
+                      color: const Color(0xFFFFD700),
+                      fontSize: size.height * 0.03,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: selections[index],
+                    items: pool
+                        .map(
+                          (option) => DropdownMenuItem<String>(
+                            value: option,
+                            child: Text(option),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: answered
+                        ? null
+                        : (value) => onChanged(index, value),
+                    dropdownColor: const Color(0xFF1A3A5C),
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: const Color(0xFF0D1B3E),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFF3A6EA5)),
+                      ),
+                    ),
+                    hint: const Text(
+                      'Select match',
+                      style: TextStyle(color: Colors.white60),
+                    ),
+                    iconEnabledColor: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
+        if (!answered)
+          ElevatedButton(
+            onPressed: ready ? onSubmit : null,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF3A6EA5),
+            ),
+            child: const Text(
+              'Check matches',
+              style: TextStyle(color: Colors.white),
+            ),
           ),
       ],
     );
@@ -1224,7 +1575,10 @@ class _FlashWidget extends StatelessWidget {
       children: [
         Text(
           'Flashcard',
-          style: TextStyle(color: Colors.white54, fontSize: size.height * 0.028),
+          style: TextStyle(
+            color: Colors.white54,
+            fontSize: size.height * 0.028,
+          ),
         ),
         SizedBox(height: size.height * 0.02),
         GestureDetector(
@@ -1240,10 +1594,9 @@ class _FlashWidget extends StatelessWidget {
               ),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                  color: revealed
-                      ? const Color(0xFFFFD700)
-                      : Colors.white38,
-                  width: 2),
+                color: revealed ? const Color(0xFFFFD700) : Colors.white38,
+                width: 2,
+              ),
             ),
             child: Center(
               child: Column(
@@ -1262,13 +1615,16 @@ class _FlashWidget extends StatelessWidget {
                     Text(
                       question.english,
                       style: TextStyle(
-                          color: Colors.white, fontSize: size.height * 0.038),
+                        color: Colors.white,
+                        fontSize: size.height * 0.038,
+                      ),
                     ),
                     Text(
                       question.hint,
                       style: TextStyle(
-                          color: Colors.white54,
-                          fontSize: size.height * 0.025),
+                        color: Colors.white54,
+                        fontSize: size.height * 0.025,
+                      ),
                     ),
                   ] else
                     Padding(
@@ -1276,8 +1632,9 @@ class _FlashWidget extends StatelessWidget {
                       child: Text(
                         'Tap to reveal',
                         style: TextStyle(
-                            color: Colors.white38,
-                            fontSize: size.height * 0.025),
+                          color: Colors.white38,
+                          fontSize: size.height * 0.025,
+                        ),
                       ),
                     ),
                 ],
@@ -1293,19 +1650,25 @@ class _FlashWidget extends StatelessWidget {
               ElevatedButton.icon(
                 onPressed: onDidnt,
                 icon: const Icon(Icons.close, color: Colors.white),
-                label: const Text("Didn't know",
-                    style: TextStyle(color: Colors.white)),
+                label: const Text(
+                  "Didn't know",
+                  style: TextStyle(color: Colors.white),
+                ),
                 style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF8B1A1A)),
+                  backgroundColor: const Color(0xFF8B1A1A),
+                ),
               ),
               const SizedBox(width: 20),
               ElevatedButton.icon(
                 onPressed: onKnew,
                 icon: const Icon(Icons.check, color: Colors.white),
-                label: const Text('I knew it!',
-                    style: TextStyle(color: Colors.white)),
+                label: const Text(
+                  'I knew it!',
+                  style: TextStyle(color: Colors.white),
+                ),
                 style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1A6B1A)),
+                  backgroundColor: const Color(0xFF1A6B1A),
+                ),
               ),
             ],
           ),

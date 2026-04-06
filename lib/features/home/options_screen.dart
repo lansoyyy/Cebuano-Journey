@@ -86,19 +86,13 @@ class _OptionsPanel extends StatelessWidget {
       child: Stack(
         children: [
           // ── Shield panel background ──────────────────────────────────
-          CustomPaint(
-            painter: _ShieldPainter(),
-            size: Size(panelW, panelH),
-          ),
+          CustomPaint(painter: _ShieldPainter(), size: Size(panelW, panelH)),
 
           // ── "Option" tab at top ──────────────────────────────────────
           Positioned(
             top: 0,
             left: panelW / 2 - innerW * 0.45,
-            child: _OptionTab(
-              width: innerW * 0.90,
-              height: tabH,
-            ),
+            child: _OptionTab(width: innerW * 0.90, height: tabH),
           ),
 
           // ── Content ──────────────────────────────────────────────────
@@ -139,8 +133,7 @@ class _OptionsPanel extends StatelessWidget {
                   height: btnH,
                   onTap: () => Navigator.push(
                     context,
-                    MaterialPageRoute(
-                        builder: (_) => const InventoryScreen()),
+                    MaterialPageRoute(builder: (_) => const InventoryScreen()),
                   ),
                 ),
                 if (isInGame) ...[
@@ -235,9 +228,15 @@ class _ShieldPainter extends CustomPainter {
       ..strokeWidth = w * 0.028
       ..style = PaintingStyle.stroke;
     canvas.drawLine(
-        Offset(w * 0.022, r), Offset(w * 0.022, h * 0.80), edgePaint);
+      Offset(w * 0.022, r),
+      Offset(w * 0.022, h * 0.80),
+      edgePaint,
+    );
     canvas.drawLine(
-        Offset(w * 0.978, r), Offset(w * 0.978, h * 0.80), edgePaint);
+      Offset(w * 0.978, r),
+      Offset(w * 0.978, h * 0.80),
+      edgePaint,
+    );
     canvas.restore();
 
     // Border
@@ -276,9 +275,10 @@ class _OptionTab extends StatelessWidget {
               letterSpacing: 2,
               shadows: const [
                 Shadow(
-                    color: Color(0x99000000),
-                    offset: Offset(2, 2),
-                    blurRadius: 2),
+                  color: Color(0x99000000),
+                  offset: Offset(2, 2),
+                  blurRadius: 2,
+                ),
               ],
             ),
           ),
@@ -382,7 +382,11 @@ class _WoodSliderRow extends StatelessWidget {
                 height: height * 0.42,
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [Color(0xFF2A1200), Color(0xFF4A2808), Color(0xFF2A1200)],
+                    colors: [
+                      Color(0xFF2A1200),
+                      Color(0xFF4A2808),
+                      Color(0xFF2A1200),
+                    ],
                     stops: [0.0, 0.50, 1.0],
                   ),
                   borderRadius: BorderRadius.circular(999),
@@ -396,8 +400,9 @@ class _WoodSliderRow extends StatelessWidget {
                   activeTrackColor: Colors.transparent,
                   inactiveTrackColor: Colors.transparent,
                   thumbColor: const Color(0xFF1C0A00),
-                  thumbShape:
-                      const RoundSliderThumbShape(enabledThumbRadius: 10),
+                  thumbShape: const RoundSliderThumbShape(
+                    enabledThumbRadius: 10,
+                  ),
                   overlayShape: SliderComponentShape.noOverlay,
                 ),
                 child: Slider(

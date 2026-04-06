@@ -80,17 +80,12 @@ class LevelGenerator {
     for (int i = 0; i < npcCount; i++) {
       final npcX = worldLength * ((i + 1) / (npcCount + 1));
       final quizWords = _pickRandom(tokenWords, min(4, tokenWords.length), rng);
-      // Each NPC in a level gets a different quiz-type rotation so the style
-      // changes between NPCs and across levels — but stays deterministic for
-      // replay (same seed → same order).
-      final typeOffset =
-          (seed + i * (QuizType.values.length + 1)) % QuizType.values.length;
       npcs.add(
         LevelNPC(
           worldX: npcX,
           name: npcNames[i % npcNames.length],
           greeting: npcGreetings[i % npcGreetings.length],
-          questions: _buildQuestions(quizWords, levelWords, rng, typeOffset),
+          questions: _buildQuestions(quizWords, levelWords, rng, difficulty),
           npcId: (npcIdBase + i) % 16 + 1,
         ),
       );
@@ -124,19 +119,63 @@ class LevelGenerator {
     List<WordToken> quizWords,
     List<WordToken> allWords,
     Random rng,
-    int typeOffset,
+    int difficulty,
   ) {
     final questions = <QuizQuestion>[];
-    final types = QuizType.values;
+    final types = _typesForDifficulty(difficulty);
     for (int i = 0; i < quizWords.length; i++) {
       final word = quizWords[i];
-      // Offset shifts the starting type so different NPCs/levels feel distinct
-      final type = types[(typeOffset + i) % types.length];
+      final type = types[(difficulty + i) % types.length];
       questions.add(_makeQuestion(type, word, allWords, rng));
     }
-    // Shuffle so questions don't appear in a predictable type sequence
     questions.shuffle(rng);
     return questions;
+  }
+
+  static List<QuizType> _typesForDifficulty(int difficulty) {
+    if (difficulty <= 1) {
+      return const [
+        QuizType.multipleChoice,
+        QuizType.fillBlank,
+        QuizType.flashcard,
+      ];
+    }
+    if (difficulty == 2) {
+      return const [
+        QuizType.multipleChoice,
+        QuizType.fillBlank,
+        QuizType.wordJumble,
+      ];
+    }
+    if (difficulty == 3) {
+      return const [
+        QuizType.wordJumble,
+        QuizType.fillBlank,
+        QuizType.conversation,
+      ];
+    }
+    if (difficulty == 4) {
+      return const [
+        QuizType.conversation,
+        QuizType.wordJumble,
+        QuizType.fillBlank,
+      ];
+    }
+    if (difficulty == 5) {
+      return const [
+        QuizType.conversation,
+        QuizType.wordMatch,
+        QuizType.fillBlank,
+      ];
+    }
+    return const [
+      QuizType.multipleChoice,
+      QuizType.fillBlank,
+      QuizType.wordJumble,
+      QuizType.flashcard,
+      QuizType.conversation,
+      QuizType.wordMatch,
+    ];
   }
 
   static QuizQuestion _makeQuestion(
@@ -174,16 +213,17 @@ class LevelGenerator {
         );
 
       case QuizType.wordJumble:
-        final letters = word.cebuano.toUpperCase().split('')..shuffle(rng);
+        final phrase = _buildWordJumblePhrase(word);
+        final words = [...phrase.$1]..shuffle(rng);
         return QuizQuestion(
           type: QuizType.wordJumble,
-          prompt:
-              'Arrange the letters to form the Cebuano word for "${word.english}":',
-          correctAnswer: word.cebuano.toUpperCase(),
-          options: letters,
+          prompt: phrase.$3,
+          correctAnswer: phrase.$2,
+          options: words,
           cebuano: word.cebuano,
           english: word.english,
-          hint: 'The word has ${word.cebuano.length} characters',
+          hint: phrase.$4,
+          useSpacesInJumble: true,
         );
 
       case QuizType.flashcard:
@@ -195,7 +235,128 @@ class LevelGenerator {
           english: word.english,
           hint: word.category,
         );
+
+      case QuizType.conversation:
+        final conversation = _buildConversationQuestion(word, allWords, rng);
+        return QuizQuestion(
+          type: QuizType.conversation,
+          prompt: conversation.$1,
+          correctAnswer: conversation.$2,
+          options: conversation.$3,
+          cebuano: word.cebuano,
+          english: word.english,
+          hint: conversation.$4,
+        );
+
+      case QuizType.wordMatch:
+        final matchWords = _pickRandom(
+          [word, ...allWords.where((candidate) => candidate.id != word.id)],
+          min(3, allWords.length),
+          rng,
+        );
+        final leftItems = matchWords.map((w) => w.cebuano).toList();
+        final rightItems = matchWords.map((w) => w.english).toList();
+        return QuizQuestion(
+          type: QuizType.wordMatch,
+          prompt: 'Match each Cebuano word with its English meaning.',
+          correctAnswer: List.generate(
+            matchWords.length,
+            (i) => '${leftItems[i]} = ${rightItems[i]}',
+          ).join('\n'),
+          options: leftItems,
+          matchTargets: rightItems,
+          cebuano: word.cebuano,
+          english: word.english,
+          hint: 'Match the words based on the clue you learned earlier.',
+        );
     }
+  }
+
+  static (List<String>, String, String, String) _buildWordJumblePhrase(
+    WordToken word,
+  ) {
+    switch (word.category) {
+      case 'Greetings':
+        final phrase = word.cebuano;
+        return (
+          phrase.split(' '),
+          phrase,
+          'Arrange the words to form the correct Cebuano greeting:',
+          'Think about the phrase someone would say in a real greeting.',
+        );
+      case 'Numbers':
+        final phrase = '${word.cebuano} ka saging';
+        return (
+          phrase.split(' '),
+          phrase,
+          'Arrange the words to say "${word.english} bananas" in Cebuano:',
+          'Put the number first, then the counter phrase.',
+        );
+      case 'Food':
+        final phrase = 'Palihug ${word.cebuano}';
+        return (
+          phrase.split(' '),
+          phrase,
+          'Arrange the words to make a simple food request:',
+          'Start with a polite request.',
+        );
+      default:
+        final phrase = 'Asa ang ${word.cebuano}';
+        return (
+          phrase.split(' '),
+          phrase,
+          'Arrange the words to complete the Cebuano phrase:',
+          'Begin with the question word.',
+        );
+    }
+  }
+
+  static (String, String, List<String>, String) _buildConversationQuestion(
+    WordToken word,
+    List<WordToken> allWords,
+    Random rng,
+  ) {
+    switch (word.category) {
+      case 'Greetings':
+        return (
+          'A local says "${word.cebuano}" to you. What is the best reply or meaning to choose?',
+          word.english,
+          _shuffledOptions(word.english, allWords.map((w) => w.english), rng),
+          'Choose the response that fits the greeting naturally.',
+        );
+      case 'Numbers':
+        return (
+          'A vendor asks for the quantity. Which Cebuano number matches "${word.english}"?',
+          word.cebuano,
+          _shuffledOptions(word.cebuano, allWords.map((w) => w.cebuano), rng),
+          'Think about the number word you would use while ordering.',
+        );
+      case 'Food':
+        return (
+          'You want to request "${word.english}" politely. Which Cebuano word should you listen for?',
+          word.cebuano,
+          _shuffledOptions(word.cebuano, allWords.map((w) => w.cebuano), rng),
+          'Pick the food word that fits the request.',
+        );
+      default:
+        return (
+          'In a short conversation, what does "${word.cebuano}" mean?',
+          word.english,
+          _shuffledOptions(word.english, allWords.map((w) => w.english), rng),
+          'Use the context of the scene, not just memorization.',
+        );
+    }
+  }
+
+  static List<String> _shuffledOptions(
+    String correct,
+    Iterable<String> candidates,
+    Random rng,
+  ) {
+    final pool = candidates.where((item) => item != correct).toSet().toList()
+      ..shuffle(rng);
+    final options = [correct, ...pool.take(3)]..shuffle(rng);
+    return options;
   }
 
   static List<T> _pickRandom<T>(List<T> source, int count, Random rng) {

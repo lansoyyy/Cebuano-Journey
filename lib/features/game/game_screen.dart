@@ -350,51 +350,57 @@ class _GameScreenState extends ConsumerState<GameScreen>
       stars = 1;
     }
 
-    final prevStars = ref.read(playerProvider).starsFor(widget.world, widget.level);
+    final prevStars = ref
+        .read(playerProvider)
+        .starsFor(widget.world, widget.level);
 
     // Save result and get coins earned (async, fire-and-forget for nav purposes)
-    ref.read(playerProvider.notifier).saveLevelResult(widget.world, widget.level, stars).then((coinsEarned) {
-      if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => LevelCompleteScreen(
-            world: widget.world,
-            level: widget.level,
-            xpEarned: _xpEarnedThisLevel,
-            tokensCollected: tokensCollected,
-            totalTokens: totalTokens,
-            stars: stars,
-            prevBestStars: prevStars,
-            coinsEarned: coinsEarned,
-            onReplay: () => Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (_) => GameScreen(world: widget.world, level: widget.level),
+    ref
+        .read(playerProvider.notifier)
+        .saveLevelResult(widget.world, widget.level, stars)
+        .then((coinsEarned) {
+          if (!mounted) return;
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => LevelCompleteScreen(
+                world: widget.world,
+                level: widget.level,
+                xpEarned: _xpEarnedThisLevel,
+                tokensCollected: tokensCollected,
+                totalTokens: totalTokens,
+                stars: stars,
+                prevBestStars: prevStars,
+                coinsEarned: coinsEarned,
+                onReplay: () => Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        GameScreen(world: widget.world, level: widget.level),
+                  ),
+                ),
+                onMenu: () => Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (_) => const MainMenuScreen()),
+                ),
+                onNext: () {
+                  int nw = widget.world;
+                  int nl = widget.level + 1;
+                  if (nl > 5) {
+                    nl = 1;
+                    nw++;
+                  }
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => GameScreen(world: nw, level: nl),
+                    ),
+                  );
+                },
               ),
             ),
-            onMenu: () => Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const MainMenuScreen()),
-            ),
-            onNext: () {
-              int nw = widget.world;
-              int nl = widget.level + 1;
-              if (nl > 5) {
-                nl = 1;
-                nw++;
-              }
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => GameScreen(world: nw, level: nl),
-                ),
-              );
-            },
-          ),
-        ),
-      );
-    });
+          );
+        });
   }
 
   void _jump() {
@@ -432,16 +438,17 @@ class _GameScreenState extends ConsumerState<GameScreen>
     // Optional pre-quiz scripted dialogue
     final npcIndex = _levelData!.npcs.indexOf(npc);
     final preDialogue = LevelIntroData.getPreNPCDialogue(
-        widget.world, widget.level, npcIndex);
+      widget.world,
+      widget.level,
+      npcIndex,
+    );
     if (preDialogue != null && preDialogue.isNotEmpty && mounted) {
       await Navigator.push<void>(
         context,
         PageRouteBuilder<void>(
           opaque: true,
-          pageBuilder: (_, __, ___) => NpcDialogueScreen(
-            npcName: npc.name,
-            lines: preDialogue,
-          ),
+          pageBuilder: (_, __, ___) =>
+              NpcDialogueScreen(npcName: npc.name, lines: preDialogue),
           transitionDuration: const Duration(milliseconds: 200),
           transitionsBuilder: (_, anim, __, child) =>
               FadeTransition(opacity: anim, child: child),
@@ -475,8 +482,8 @@ class _GameScreenState extends ConsumerState<GameScreen>
     }
 
     final msg = result.passed
-        ? 'Maayo! +${result.xpEarned} EXP earned!'
-        : 'Wala makaagi. Better luck next time!';
+        ? 'Maayo! +${result.xpEarned} XP'
+        : 'Try harder next time!';
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -606,6 +613,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
             level: widget.level,
             themeLabel: _levelData?.themeLabel ?? '',
             showInteract: _nearNPC != null,
+            interactLabel: _nearNPC?.name ?? '',
             dashCooldown: _dashCooldown,
             isCrouching: _isCrouching,
             onInventory: () => Navigator.push(

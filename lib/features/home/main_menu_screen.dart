@@ -75,7 +75,8 @@ class _MainMenuScreenState extends ConsumerState<MainMenuScreen> {
                 onOption: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                      builder: (_) => const OptionsScreen(isInGame: false)),
+                    builder: (_) => const OptionsScreen(isInGame: false),
+                  ),
                 ),
                 onExit: () => SystemNavigator.pop(),
               ),
@@ -184,7 +185,11 @@ class _BadgeChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.white24),
         boxShadow: const [
-          BoxShadow(color: Color(0x44000000), blurRadius: 4, offset: Offset(1, 2)),
+          BoxShadow(
+            color: Color(0x44000000),
+            blurRadius: 4,
+            offset: Offset(1, 2),
+          ),
         ],
       ),
       child: Row(
@@ -230,8 +235,7 @@ class _WoodenSignpost extends StatelessWidget {
     final bottomPost = size.height * 0.220;
 
     final totalW = signW + size.width * 0.022; // arrow overhang room
-    final totalH =
-        capH + gap + signH + gap + signH + gap + signH + bottomPost;
+    final totalH = capH + gap + signH + gap + signH + gap + signH + bottomPost;
 
     return SizedBox(
       width: totalW,
@@ -411,8 +415,8 @@ class _SignButtonState extends State<_SignButton> {
               alignment: widget.shape == _SignShape.rightArrow
                   ? const Alignment(0.15, 0)
                   : widget.shape == _SignShape.leftArrow
-                      ? const Alignment(-0.15, 0)
-                      : Alignment.center,
+                  ? const Alignment(-0.15, 0)
+                  : Alignment.center,
               child: Text(
                 widget.label,
                 style: TextStyle(
@@ -684,10 +688,14 @@ class _FlagPainter extends CustomPainter {
     for (int i = 0; i < 5; i++) {
       final outerA = i * 2 * pi / 5 - pi / 2;
       final innerA = (i + 0.5) * 2 * pi / 5 - pi / 2;
-      final outerPt =
-          Offset(center.dx + r * cos(outerA), center.dy + r * sin(outerA));
+      final outerPt = Offset(
+        center.dx + r * cos(outerA),
+        center.dy + r * sin(outerA),
+      );
       final innerPt = Offset(
-          center.dx + innerR * cos(innerA), center.dy + innerR * sin(innerA));
+        center.dx + innerR * cos(innerA),
+        center.dy + innerR * sin(innerA),
+      );
       if (i == 0) {
         path.moveTo(outerPt.dx, outerPt.dy);
       } else {
@@ -702,4 +710,3 @@ class _FlagPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
-
