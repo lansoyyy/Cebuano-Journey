@@ -475,8 +475,8 @@ class _GameScreenState extends ConsumerState<GameScreen>
     }
 
     final msg = result.passed
-        ? 'Maayo! +${result.xpEarned} XP'
-        : 'Try harder next time!';
+        ? 'Maayo! +${result.xpEarned} EXP earned!'
+        : 'Wala makaagi. Better luck next time!';
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(

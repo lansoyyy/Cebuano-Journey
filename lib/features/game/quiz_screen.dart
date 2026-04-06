@@ -1,17 +1,31 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/cebuano_words.dart';
 import '../../core/models/quiz_question.dart';
 import '../../core/providers/player_provider.dart';
 
+// ── EXP-based quiz system constants ─────────────────────────────────────────
+const int _kStartExp = 100;
+const int _kExpPerWrong = 10;   // EXP deducted per wrong answer per round
+const int _kMaxRetryRounds = 3;
+const int _kPassThreshold = 70;
+
+enum _Phase { answering, retryIntro, result }
+
 class QuizResult {
   final int correct;
   final int total;
-  bool get passed => correct >= (total / 2).ceil();
-  int get xpEarned => correct * 30;
+  final int finalExp;
+  bool get passed => finalExp >= _kPassThreshold;
+  int get xpEarned => finalExp;
 
-  const QuizResult({required this.correct, required this.total});
+  const QuizResult({
+    required this.correct,
+    required this.total,
+    required this.finalExp,
+  });
 }
 
 class QuizScreen extends ConsumerStatefulWidget {
@@ -31,11 +45,19 @@ class QuizScreen extends ConsumerStatefulWidget {
 }
 
 class _QuizScreenState extends ConsumerState<QuizScreen> {
+  // \u2500\u2500\u2500 EXP / round state \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  int _exp = _kStartExp;
+  int _retryRound = 0;                   // 0 = initial, 1\u20133 = retry rounds
+  late List<QuizQuestion> _roundQuestions; // current round\u2019s questions
+  List<QuizQuestion> _wrongQuestions = []; // questions answered wrong this round
+  int _totalCorrect = 0;                 // first-time correct count (for display)
+  _Phase _phase = _Phase.answering;
+
+  // \u2500\u2500\u2500 Per-question state \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
   int _index = 0;
-  int _correct = 0;
   bool _answered = false;
   String? _selected;
-  bool _revealed = false; // for flashcard
+  bool _revealed = false;
   bool _showExampleClue = false;
 
   // Fill blank
@@ -49,12 +71,40 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
   int _timeLeft = 30;
   Timer? _timer;
 
-  QuizQuestion get _q => widget.questions[_index];
+  QuizQuestion get _q => _roundQuestions[_index];
 
   @override
   void initState() {
     super.initState();
+    // Initialise directly (no setState during initState)
+    _roundQuestions = widget.questions.toList()..shuffle(Random());
     _initQuestion();
+  }
+
+  // Restart: reshuffle all questions and reset every state field
+  void _startSession() {
+    _timer?.cancel();
+    final shuffled = widget.questions.toList()..shuffle(Random());
+    setState(() {
+      _exp = _kStartExp;
+      _retryRound = 0;
+      _roundQuestions = shuffled;
+      _wrongQuestions = [];
+      _totalCorrect = 0;
+      _phase = _Phase.answering;
+      _index = 0;
+      _answered = false;
+      _selected = null;
+      _revealed = false;
+      _showExampleClue = false;
+    });
+    _fillCtrl.clear();
+    _jumbleSelected = [];
+    _jumblePool =
+        shuffled.isNotEmpty && shuffled[0].type == QuizType.wordJumble
+            ? [...shuffled[0].options]
+            : [];
+    _startTimer();
   }
 
   void _initQuestion() {
@@ -95,30 +145,71 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
   void _submitAnswer(String answer) {
     if (_answered) return;
     _timer?.cancel();
-    final correct = answer.trim().toLowerCase() ==
+    final isCorrect = answer.trim().toLowerCase() ==
         _q.correctAnswer.trim().toLowerCase();
-    if (correct) _correct++;
+    if (isCorrect) {
+      if (_retryRound == 0) _totalCorrect++;
+    } else {
+      // Deduct EXP and record for potential retry round
+      _exp = (_exp - _kExpPerWrong).clamp(0, _kStartExp);
+      _wrongQuestions.add(_q);
+      ref.read(playerProvider.notifier).loseHeart();
+    }
     setState(() {
       _answered = true;
       _selected = answer;
     });
-    if (!correct) {
-      ref.read(playerProvider.notifier).loseHeart();
-    }
   }
 
   void _next() {
-    if (_index + 1 >= widget.questions.length) {
-      final result = QuizResult(correct: _correct, total: widget.questions.length);
-      if (result.passed) {
-        ref.read(playerProvider.notifier).addXp(result.xpEarned);
-      }
-      Navigator.pop(context, result);
-    } else {
+    if (_index + 1 < _roundQuestions.length) {
       setState(() => _index++);
       _initQuestion();
+    } else {
+      _advanceRound();
     }
   }
+
+  // Called when current round finishes — decide what happens next
+  void _advanceRound() {
+    _timer?.cancel();
+    if (_wrongQuestions.isNotEmpty && _retryRound < _kMaxRetryRounds) {
+      setState(() => _phase = _Phase.retryIntro);
+    } else {
+      setState(() => _phase = _Phase.result);
+    }
+  }
+
+  // Start the next retry round using only wrong questions
+  void _startRetryRound() {
+    final nextQuestions = List<QuizQuestion>.from(_wrongQuestions);
+    setState(() {
+      _retryRound++;
+      _roundQuestions = nextQuestions;
+      _wrongQuestions = [];
+      _index = 0;
+      _phase = _Phase.answering;
+    });
+    _initQuestion();
+  }
+
+  // Finish the quiz: optionally award XP and return result to GameScreen
+  void _finish(bool proceed) {
+    if (proceed) {
+      ref.read(playerProvider.notifier).addXp(_exp);
+    }
+    Navigator.pop(
+      context,
+      QuizResult(
+        correct: _totalCorrect,
+        total: widget.questions.length,
+        finalExp: _exp,
+      ),
+    );
+  }
+
+  // Restart from scratch with reshuffled questions
+  void _restart() => _startSession();
 
   void _useHint() {
     final player = ref.read(playerProvider);
@@ -134,6 +225,18 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
+    switch (_phase) {
+      case _Phase.retryIntro:
+        return _buildRetryIntroScreen(size);
+      case _Phase.result:
+        return _buildResultScreen(size);
+      case _Phase.answering:
+        return _buildQuizScreen(size);
+    }
+  }
+
+  // \u2500\u2500 Main quiz answering screen \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  Widget _buildQuizScreen(Size size) {
     final player = ref.watch(playerProvider);
 
     return Scaffold(
@@ -148,25 +251,66 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
         child: SafeArea(
           child: Column(
             children: [
-              // ── Header ──────────────────────────────────────────────────
+              // \u2500\u2500 Header \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
               Padding(
                 padding: EdgeInsets.all(size.width * 0.02),
                 child: Row(
                   children: [
-                    // NPC name
+                    // NPC name + retry badge
                     Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.npcName,
+                            style: TextStyle(
+                              color: const Color(0xFFFFD700),
+                              fontSize: size.height * 0.04,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          if (_retryRound > 0)
+                            Text(
+                              'Retry Round $_retryRound\u00a0/\u00a0$_kMaxRetryRounds',
+                              style: TextStyle(
+                                color: Colors.orangeAccent,
+                                fontSize: size.height * 0.022,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    // EXP live indicator
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: _exp >= _kPassThreshold
+                            ? const Color(0xFF1A4A1A)
+                            : const Color(0xFF4A2A00),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: _exp >= _kPassThreshold
+                              ? Colors.greenAccent
+                              : Colors.orangeAccent,
+                        ),
+                      ),
                       child: Text(
-                        widget.npcName,
+                        '$_exp EXP',
                         style: TextStyle(
-                          color: const Color(0xFFFFD700),
-                          fontSize: size.height * 0.04,
+                          color: _exp >= _kPassThreshold
+                              ? Colors.greenAccent
+                              : Colors.orangeAccent,
                           fontWeight: FontWeight.bold,
+                          fontSize: size.height * 0.028,
                         ),
                       ),
                     ),
+                    SizedBox(width: size.width * 0.02),
                     // Progress
                     Text(
-                      '${_index + 1}/${widget.questions.length}',
+                      '${_index + 1}/${_roundQuestions.length}',
                       style: TextStyle(
                           color: Colors.white70,
                           fontSize: size.height * 0.03),
@@ -204,7 +348,7 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
                 ),
               ),
 
-              // ── NPC greeting (first question only) ──────────────────────
+              // \u2500\u2500 NPC greeting (first question only) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
               if (_index == 0)
                 Padding(
                   padding: EdgeInsets.symmetric(horizontal: size.width * 0.04),
@@ -484,12 +628,321 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
                 borderRadius: BorderRadius.circular(10)),
           ),
           child: Text(
-            _index + 1 >= widget.questions.length ? 'Finish' : 'Next  →',
+            _index + 1 >= _roundQuestions.length ? 'Finish Round' : 'Next  →',
             style: TextStyle(
                 fontSize: size.height * 0.032, fontWeight: FontWeight.bold),
           ),
         ),
       ],
+    );
+  }
+
+  // \u2500\u2500 LOOP ACTIVATED screen \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  Widget _buildRetryIntroScreen(Size size) {
+    final wrongCount = _wrongQuestions.length;
+    final nextRound = _retryRound + 1;
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF1A0A00), Color(0xFF3A1A00)],
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: EdgeInsets.all(size.width * 0.06),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.loop,
+                      color: Colors.orangeAccent,
+                      size: size.height * 0.10),
+                  SizedBox(height: size.height * 0.03),
+                  Text(
+                    'LOOP ACTIVATED!',
+                    style: TextStyle(
+                      color: Colors.orangeAccent,
+                      fontSize: size.height * 0.055,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                  SizedBox(height: size.height * 0.02),
+                  Text(
+                    'You had $wrongCount incorrect answer${wrongCount == 1 ? '' : 's'}.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        color: Colors.white, fontSize: size.height * 0.035),
+                  ),
+                  SizedBox(height: size.height * 0.01),
+                  Text(
+                    'Retry Round $nextRound\u00a0/\u00a0$_kMaxRetryRounds',
+                    style: TextStyle(
+                        color: Colors.white70, fontSize: size.height * 0.030),
+                  ),
+                  SizedBox(height: size.height * 0.02),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.black26,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(
+                          'Current EXP\u00a0\u00a0$_exp / $_kStartExp',
+                          style: TextStyle(
+                            color: _exp >= _kPassThreshold
+                                ? Colors.greenAccent
+                                : Colors.orangeAccent,
+                            fontSize: size.height * 0.032,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        SizedBox(height: size.height * 0.008),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: LinearProgressIndicator(
+                            value: _exp / _kStartExp,
+                            minHeight: 10,
+                            backgroundColor: Colors.black38,
+                            valueColor: AlwaysStoppedAnimation(
+                              _exp >= _kPassThreshold
+                                  ? Colors.greenAccent
+                                  : Colors.orangeAccent,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(height: size.height * 0.015),
+                  Text(
+                    'Each wrong answer costs \u2013$_kExpPerWrong EXP.\n'
+                    'You need $_kPassThreshold EXP to pass.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        color: Colors.white54,
+                        fontSize: size.height * 0.026),
+                  ),
+                  SizedBox(height: size.height * 0.05),
+                  ElevatedButton(
+                    onPressed: _startRetryRound,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFFF6B00),
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: size.width * 0.10,
+                        vertical: size.height * 0.022,
+                      ),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: Text(
+                      'Try Again',
+                      style: TextStyle(
+                        fontSize: size.height * 0.038,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // \u2500\u2500 Final result screen \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  Widget _buildResultScreen(Size size) {
+    final passed = _exp >= _kPassThreshold;
+    return Scaffold(
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: passed
+                ? [const Color(0xFF0A2A0A), const Color(0xFF1A4A1A)]
+                : [const Color(0xFF2A0A0A), const Color(0xFF4A1A1A)],
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: EdgeInsets.all(size.width * 0.06),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    passed
+                        ? Icons.emoji_events
+                        : Icons.sentiment_dissatisfied,
+                    color: passed
+                        ? const Color(0xFFFFD700)
+                        : Colors.redAccent,
+                    size: size.height * 0.10,
+                  ),
+                  SizedBox(height: size.height * 0.025),
+                  Text(
+                    passed ? 'PASSED!' : 'FAILED',
+                    style: TextStyle(
+                      color: passed
+                          ? const Color(0xFFFFD700)
+                          : Colors.redAccent,
+                      fontSize: size.height * 0.065,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 3,
+                    ),
+                  ),
+                  SizedBox(height: size.height * 0.03),
+                  // EXP result card
+                  Container(
+                    width: size.width * 0.72,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.black26,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: passed ? Colors.greenAccent : Colors.redAccent,
+                        width: 2,
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(
+                          'Final EXP',
+                          style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: size.height * 0.028),
+                        ),
+                        SizedBox(height: size.height * 0.01),
+                        Text(
+                          '$_exp / $_kStartExp',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: size.height * 0.07,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        SizedBox(height: size.height * 0.015),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: LinearProgressIndicator(
+                            value: _exp / _kStartExp,
+                            minHeight: 16,
+                            backgroundColor: Colors.black38,
+                            valueColor: AlwaysStoppedAnimation(
+                              passed ? Colors.greenAccent : Colors.redAccent,
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: size.height * 0.01),
+                        Text(
+                          passed
+                              ? 'Required: $_kPassThreshold EXP  \u2713'
+                              : 'Required: $_kPassThreshold EXP  '
+                                  '(Need ${_kPassThreshold - _exp} more)',
+                          style: TextStyle(
+                            color: passed
+                                ? Colors.greenAccent
+                                : Colors.orangeAccent,
+                            fontSize: size.height * 0.025,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(height: size.height * 0.04),
+                  if (passed) ...[
+                    ElevatedButton(
+                      onPressed: () => _finish(true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFFD700),
+                        foregroundColor: Colors.black,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: size.width * 0.10,
+                          vertical: size.height * 0.022,
+                        ),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: Text(
+                        'Proceed  \u2192',
+                        style: TextStyle(
+                          fontSize: size.height * 0.038,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ] else ...[
+                    Text(
+                      'You did not reach the required EXP.\nChoose an option:',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: size.height * 0.028),
+                    ),
+                    SizedBox(height: size.height * 0.03),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        ElevatedButton(
+                          onPressed: _restart,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF3A6EA5),
+                            foregroundColor: Colors.white,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: size.width * 0.06,
+                              vertical: size.height * 0.02,
+                            ),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                          ),
+                          child: Text(
+                            '\u21ba  Restart',
+                            style: TextStyle(
+                              fontSize: size.height * 0.032,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: size.width * 0.04),
+                        ElevatedButton(
+                          onPressed: () => _finish(false),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF4A1A1A),
+                            foregroundColor: Colors.white,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: size.width * 0.06,
+                              vertical: size.height * 0.02,
+                            ),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                          ),
+                          child: Text(
+                            'End',
+                            style: TextStyle(
+                              fontSize: size.height * 0.032,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
