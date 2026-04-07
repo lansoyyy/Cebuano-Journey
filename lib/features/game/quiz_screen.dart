@@ -8,9 +8,9 @@ import '../../core/providers/player_provider.dart';
 
 // ── EXP-based quiz system constants ─────────────────────────────────────────
 const int _kStartExp = 100;
-const int _kExpPerWrong = 10; // EXP deducted per wrong answer per round
+const int _kExpPerRetry = 10; // EXP deducted flat per retry round (max 3 × 10 = −30)
 const int _kMaxRetryRounds = 3;
-const int _kPassThreshold = 70;
+const int _kPassThreshold = 80;
 
 enum _Phase { answering, retryIntro, result }
 
@@ -170,7 +170,6 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
     if (correct) {
       if (_retryRound == 0) _totalCorrect++;
     } else {
-      _exp = (_exp - _kExpPerWrong).clamp(0, _kStartExp);
       _wrongQuestions.add(_q);
       ref.read(playerProvider.notifier).loseHeart();
     }
@@ -205,6 +204,7 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
   void _startRetryRound() {
     final nextQuestions = List<QuizQuestion>.from(_wrongQuestions);
     setState(() {
+      _exp = (_exp - _kExpPerRetry).clamp(0, _kStartExp);
       _retryRound++;
       _roundQuestions = nextQuestions;
       _wrongQuestions = [];
@@ -844,7 +844,7 @@ class _QuizScreenState extends ConsumerState<QuizScreen> {
                   ),
                   SizedBox(height: size.height * 0.015),
                   Text(
-                    'Each wrong answer costs \u2013$_kExpPerWrong EXP.\n'
+                    'This retry attempt costs \u2013$_kExpPerRetry EXP.\n'
                     'You need $_kPassThreshold EXP to pass.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
