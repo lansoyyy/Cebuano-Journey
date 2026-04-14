@@ -145,6 +145,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
         ? 0.0
         : (elapsed - _last).inMicroseconds / 1e6;
     _last = elapsed;
+    if (dt <= 0) return;
     _gameTime += dt; // Track game time for moving platforms
     setState(() {
       _cloudDrift += 18.0 * dt;
@@ -180,14 +181,29 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
       // Jump physics with double jump
       if (_isJumping) {
+        final oldJumpY = _jumpY;
         _jumpVY += _gravity * dt;
         _jumpY += _jumpVY * dt;
+
+        final landedPlatformY = _findLandingPlatformY(oldJumpY, _jumpY);
+        if (landedPlatformY != null && _jumpVY >= 0) {
+          _jumpY = landedPlatformY;
+          _jumpVY = 0;
+          _isJumping = false;
+          _jumpCount = 0;
+        }
+
         if (_jumpY >= 0) {
           _jumpY = 0;
           _jumpVY = 0;
           _isJumping = false;
           _jumpCount = 0; // Reset jump count when landing
         }
+      }
+
+      // If standing on a moving platform, keep player attached until stepping off.
+      if (!_isJumping) {
+        _syncStandingWithPlatform();
       }
 
       // Animation and facing
@@ -209,6 +225,68 @@ class _GameScreenState extends ConsumerState<GameScreen>
       _checkNPCProximity();
       _checkLevelComplete();
     });
+  }
+
+  bool _isPlayerHorizontallyOnPlatform(LevelPlatform platform) {
+    final size = MediaQuery.of(context).size;
+    final charScreenX = size.width * 0.27;
+    final charH =
+        size.height * 0.20 * (_isCrouching ? _crouchHeightMultiplier : 1.0);
+    final charW = charH * 0.55;
+    final platformX = platform.getCurrentX(_gameTime) - _worldX;
+    final playerLeft = charScreenX - charW / 2;
+    final playerRight = charScreenX + charW / 2;
+    final platformLeft = platformX;
+    final platformRight = platformX + platform.width;
+    return playerRight > platformLeft + 6 && playerLeft < platformRight - 6;
+  }
+
+  double? _findLandingPlatformY(double oldJumpY, double newJumpY) {
+    if (_levelData == null) return null;
+    final size = MediaQuery.of(context).size;
+    final groundY = size.height * 0.64;
+    final oldBottom = groundY + oldJumpY;
+    final newBottom = groundY + newJumpY;
+
+    double? bestLandingY;
+    for (final platform in _levelData!.platforms) {
+      if (!_isPlayerHorizontallyOnPlatform(platform)) continue;
+      final top = platform.screenY;
+      final crossedTop = oldBottom <= top + 2 && newBottom >= top - 2;
+      if (!crossedTop) continue;
+
+      final candidateJumpY = top - groundY;
+      if (candidateJumpY > 0) continue;
+      if (bestLandingY == null || candidateJumpY > bestLandingY) {
+        bestLandingY = candidateJumpY;
+      }
+    }
+    return bestLandingY;
+  }
+
+  void _syncStandingWithPlatform() {
+    if (_levelData == null) return;
+    final size = MediaQuery.of(context).size;
+    final groundY = size.height * 0.64;
+    final currentBottom = groundY + _jumpY;
+
+    double? standingY;
+    for (final platform in _levelData!.platforms) {
+      if (!_isPlayerHorizontallyOnPlatform(platform)) continue;
+      final top = platform.screenY;
+      if ((currentBottom - top).abs() <= 4) {
+        final y = top - groundY;
+        if (y <= 0 && (standingY == null || y > standingY)) {
+          standingY = y;
+        }
+      }
+    }
+
+    if (standingY != null) {
+      _jumpY = standingY;
+    } else if (_jumpY < 0) {
+      _isJumping = true;
+    }
   }
 
   void _checkTokens() {
@@ -372,31 +450,6 @@ class _GameScreenState extends ConsumerState<GameScreen>
                 stars: stars,
                 prevBestStars: prevStars,
                 coinsEarned: coinsEarned,
-                onReplay: () => Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        GameScreen(world: widget.world, level: widget.level),
-                  ),
-                ),
-                onMenu: () => Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => const MainMenuScreen()),
-                ),
-                onNext: () {
-                  int nw = widget.world;
-                  int nl = widget.level + 1;
-                  if (nl > 5) {
-                    nl = 1;
-                    nw++;
-                  }
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => GameScreen(world: nw, level: nl),
-                    ),
-                  );
-                },
               ),
             ),
           );

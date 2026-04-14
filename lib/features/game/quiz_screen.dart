@@ -1171,7 +1171,9 @@ class _FillWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final viewInsets = MediaQuery.of(context).viewInsets;
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         clue,
         SizedBox(height: size.height * 0.02),
@@ -1189,6 +1191,7 @@ class _FillWidget extends StatelessWidget {
           controller: ctrl,
           enabled: !answered,
           autofocus: true,
+          textInputAction: TextInputAction.done,
           style: TextStyle(color: Colors.white, fontSize: size.height * 0.04),
           textAlign: TextAlign.center,
           decoration: InputDecoration(
@@ -1207,6 +1210,7 @@ class _FillWidget extends StatelessWidget {
           ),
           onSubmitted: answered ? null : onSubmit,
         ),
+        SizedBox(height: viewInsets.bottom > 0 ? 12 : 0),
         if (!answered) ...[
           SizedBox(height: size.height * 0.02),
           ElevatedButton(

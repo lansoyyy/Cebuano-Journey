@@ -59,7 +59,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    final titleH = size.height * 0.13;
+    final titleH = (size.height * 0.11).clamp(72.0, 112.0);
     final player = ref.watch(playerProvider);
 
     final allCollected = CebuanoWordBank.words
@@ -77,109 +77,119 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen>
           ),
           Container(color: const Color(0x66000000)),
 
-          // ── Title bar ────────────────────────────────────────────────────
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              height: titleH,
-              color: const Color(0xBB000000),
-              padding: EdgeInsets.symmetric(horizontal: size.width * 0.02),
-              child: Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Icon(
-                      Icons.arrow_back,
-                      color: Colors.white,
-                      size: size.height * 0.05,
-                    ),
-                  ),
-                  Expanded(
-                    child: Text(
-                      'INVENTORY',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: size.height * 0.055,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.white,
-                        letterSpacing: 4,
-                      ),
-                    ),
-                  ),
-                  // Word count badge
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1A3A5C),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.white24),
-                    ),
-                    child: Text(
-                      '${allCollected.length}/${CebuanoWordBank.words.length} words',
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: size.height * 0.018,
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: size.width * 0.015),
-                  // Hint counter
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF2A4A2A),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.lightbulb, color: Color(0xFFFFD700), size: 18),
-                        const SizedBox(width: 4),
-                        Text(
-                          'x${player.hintCount} Hints',
-                          style: const TextStyle(color: Colors.white, fontSize: 13),
+          SafeArea(
+            child: Column(
+              children: [
+                Container(
+                  height: titleH,
+                  color: const Color(0xBB000000),
+                  padding: EdgeInsets.symmetric(horizontal: size.width * 0.03),
+                  child: Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: Icon(
+                          Icons.arrow_back,
+                          color: Colors.white,
+                          size: size.width < 700 ? 28 : 36,
                         ),
-                      ],
-                    ),
+                      ),
+                      SizedBox(width: size.width * 0.02),
+                      Expanded(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            'INVENTORY',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: size.width < 700 ? 42 : 56,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                              letterSpacing: 4,
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: size.width * 0.02),
+                      Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1A3A5C),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.white24),
+                            ),
+                            child: Text(
+                              '${allCollected.length}/${CebuanoWordBank.words.length} words',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: size.width < 700 ? 11 : 13,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2A4A2A),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.lightbulb, color: Color(0xFFFFD700), size: 16),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'x${player.hintCount}',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: size.width < 700 ? 11 : 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
-          ),
+                ),
 
-          // ── View-mode toggle ─────────────────────────────────────────────
-          Positioned(
-            top: titleH + 6,
-            left: size.width * 0.015,
-            right: size.width * 0.015,
-            child: _ViewToggle(
-              current: _viewMode,
-              onChanged: (m) => setState(() => _viewMode = m),
-              size: size,
-            ),
-          ),
-
-          // ── Content area ─────────────────────────────────────────────────
-          Positioned(
-            top: titleH + size.height * 0.075,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: _viewMode == _ViewMode.byCategory
-                ? _CategoryView(
-                    allCollected: allCollected,
-                    categories: _categories,
-                    selectedCategory: _selectedCategory,
-                    onCategoryChanged: (c) =>
-                        setState(() => _selectedCategory = c),
-                    size: size,
-                  )
-                : _ByLevelView(
-                    allCollected: allCollected,
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    size.width * 0.02,
+                    8,
+                    size.width * 0.02,
+                    8,
+                  ),
+                  child: _ViewToggle(
+                    current: _viewMode,
+                    onChanged: (m) => setState(() => _viewMode = m),
                     size: size,
                   ),
+                ),
+
+                Expanded(
+                  child: _viewMode == _ViewMode.byCategory
+                      ? _CategoryView(
+                          allCollected: allCollected,
+                          categories: _categories,
+                          selectedCategory: _selectedCategory,
+                          onCategoryChanged: (c) =>
+                              setState(() => _selectedCategory = c),
+                          size: size,
+                        )
+                      : _ByLevelView(
+                          allCollected: allCollected,
+                          size: size,
+                        ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -200,7 +210,9 @@ class _ViewToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Wrap(
+      spacing: size.width * 0.01,
+      runSpacing: 6,
       children: [
         _ToggleBtn(
           label: 'By Category',
@@ -209,7 +221,6 @@ class _ViewToggle extends StatelessWidget {
           onTap: () => onChanged(_ViewMode.byCategory),
           size: size,
         ),
-        SizedBox(width: size.width * 0.01),
         _ToggleBtn(
           label: 'By Level',
           icon: Icons.layers,
@@ -238,12 +249,13 @@ class _ToggleBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isPhone = size.width < 700;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: EdgeInsets.symmetric(
-          horizontal: size.width * 0.025,
-          vertical: size.height * 0.008,
+          horizontal: isPhone ? 12 : size.width * 0.025,
+          vertical: isPhone ? 8 : size.height * 0.008,
         ),
         decoration: BoxDecoration(
           color: active ? const Color(0xFFFFD700) : const Color(0x441A3A5C),
@@ -258,7 +270,7 @@ class _ToggleBtn extends StatelessWidget {
             Icon(
               icon,
               color: active ? Colors.black : Colors.white70,
-              size: size.height * 0.022,
+              size: isPhone ? 16 : size.height * 0.022,
             ),
             SizedBox(width: size.width * 0.008),
             Text(
@@ -266,7 +278,7 @@ class _ToggleBtn extends StatelessWidget {
               style: TextStyle(
                 color: active ? Colors.black : Colors.white,
                 fontWeight: active ? FontWeight.bold : FontWeight.normal,
-                fontSize: size.height * 0.019,
+                fontSize: isPhone ? 13 : size.height * 0.019,
               ),
             ),
           ],
@@ -294,6 +306,14 @@ class _CategoryView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final crossAxisCount = size.width >= 1200
+      ? 5
+      : size.width >= 900
+        ? 4
+        : size.width >= 650
+          ? 3
+          : 2;
+    final cardAspectRatio = size.width < 650 ? 1.25 : 1.5;
     final filtered =
         selectedCategory == null || selectedCategory == 'All'
             ? allCollected
@@ -351,12 +371,11 @@ class _CategoryView extends StatelessWidget {
                 )
               : GridView.builder(
                   padding: EdgeInsets.all(size.width * 0.015),
-                  gridDelegate:
-                      const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 4,
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: crossAxisCount,
                     crossAxisSpacing: 8,
                     mainAxisSpacing: 8,
-                    childAspectRatio: 1.5,
+                    childAspectRatio: cardAspectRatio,
                   ),
                   itemCount: filtered.length,
                   itemBuilder: (_, i) => _WordCard(word: filtered[i]),
@@ -384,6 +403,15 @@ class _ByLevelViewState extends State<_ByLevelView> {
 
   @override
   Widget build(BuildContext context) {
+    final crossAxisCount = widget.size.width >= 1200
+        ? 5
+        : widget.size.width >= 900
+            ? 4
+            : widget.size.width >= 650
+                ? 3
+                : 2;
+    final cardAspectRatio = widget.size.width < 650 ? 1.25 : 1.5;
+
     // Group collected words by level
     final Map<int, List<WordToken>> byLevel = {};
     for (final word in widget.allCollected) {
@@ -514,12 +542,11 @@ class _ByLevelViewState extends State<_ByLevelView> {
                   child: GridView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 4,
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: crossAxisCount,
                       crossAxisSpacing: 8,
                       mainAxisSpacing: 8,
-                      childAspectRatio: 1.5,
+                      childAspectRatio: cardAspectRatio,
                     ),
                     itemCount: words.length,
                     itemBuilder: (_, j) => _WordCard(word: words[j]),
@@ -550,41 +577,57 @@ class _WordCardState extends State<_WordCard> {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () => setState(() => _flipped = !_flipped),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        decoration: BoxDecoration(
-          color: _flipped ? const Color(0xFF1A4A2A) : const Color(0xFF1A2A45),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: _flipped ? const Color(0xFF4CAF50) : const Color(0xFF3A6EA5),
-            width: 1.5,
-          ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              _flipped ? widget.word.english : widget.word.cebuano,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Color(0xFFFFD700),
-                fontWeight: FontWeight.bold,
-                fontSize: 13,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final base = constraints.maxHeight.clamp(80.0, 220.0);
+          final titleSize = (base * 0.16).clamp(11.0, 16.0);
+          final subSize = (base * 0.13).clamp(9.0, 14.0);
+          final categorySize = (base * 0.10).clamp(8.0, 12.0);
+
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(
+              color: _flipped ? const Color(0xFF1A4A2A) : const Color(0xFF1A2A45),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: _flipped ? const Color(0xFF4CAF50) : const Color(0xFF3A6EA5),
+                width: 1.5,
               ),
             ),
-            const SizedBox(height: 2),
-            Text(
-              _flipped ? widget.word.cebuano : widget.word.english,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white70, fontSize: 11),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  _flipped ? widget.word.english : widget.word.cebuano,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: const Color(0xFFFFD700),
+                    fontWeight: FontWeight.bold,
+                    fontSize: titleSize,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _flipped ? widget.word.cebuano : widget.word.english,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white70, fontSize: subSize),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  widget.word.category,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: Colors.white38, fontSize: categorySize),
+                ),
+              ],
             ),
-            const SizedBox(height: 2),
-            Text(
-              widget.word.category,
-              style: const TextStyle(color: Colors.white38, fontSize: 9),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
