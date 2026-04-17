@@ -12,8 +12,22 @@ class LevelSelectScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final player = ref.watch(playerProvider);
     final size = MediaQuery.of(context).size;
-    final maxWorld = ((player.level - 1) ~/ 5) + 1;
-    final maxLevel = ((player.level - 1) % 5) + 1;
+
+    // Determine how many worlds to display (always at least 1, up to 4)
+    // A world is shown when the previous world's level 5 has been completed
+    int totalWorlds = 1;
+    for (int w = 1; w <= 3; w++) {
+      if (player.starsFor(w, 5) > 0) totalWorlds = w + 1;
+    }
+    totalWorlds = totalWorlds.clamp(1, 4);
+
+    // Helper: level is unlocked if it is W1-L1, or if the prior level has stars
+    bool isLevelUnlocked(int worldNum, int levelNum) {
+      if (worldNum == 1 && levelNum == 1) return true;
+      final prevLevel = levelNum == 1 ? 5 : levelNum - 1;
+      final prevWorld = levelNum == 1 ? worldNum - 1 : worldNum;
+      return player.starsFor(prevWorld, prevLevel) > 0;
+    }
 
     return Scaffold(
       body: Container(
@@ -70,10 +84,9 @@ class LevelSelectScreen extends ConsumerWidget {
                 child: ListView.builder(
                   padding: EdgeInsets.all(size.width * 0.04),
                   itemCount:
-                      maxWorld, // Can only see worlds unlocked by player level
+                      totalWorlds,
                   itemBuilder: (context, wIndex) {
                     final worldNum = wIndex + 1;
-                    final levelsInWorld = (worldNum == maxWorld) ? maxLevel : 5;
 
                     return Container(
                       margin: EdgeInsets.only(bottom: size.height * 0.04),
@@ -107,7 +120,7 @@ class LevelSelectScreen extends ConsumerWidget {
                               itemCount: 5,
                               itemBuilder: (context, lIndex) {
                                 final levelNum = lIndex + 1;
-                                final isUnlocked = levelNum <= levelsInWorld;
+                                final isUnlocked = isLevelUnlocked(worldNum, levelNum);
                                 final globalLevel =
                                     ((worldNum - 1) * 5) + levelNum;
                                 final bestStars =

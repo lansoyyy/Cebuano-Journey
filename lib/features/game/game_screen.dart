@@ -86,7 +86,6 @@ class _GameScreenState extends ConsumerState<GameScreen>
   LevelNPC? _nearNPC;
 
   // Game session stats
-  int _xpEarnedThisLevel = 0;
   bool _levelCompleteHandled = false;
 
   @override
@@ -444,7 +443,6 @@ class _GameScreenState extends ConsumerState<GameScreen>
               builder: (_) => LevelCompleteScreen(
                 world: widget.world,
                 level: widget.level,
-                xpEarned: _xpEarnedThisLevel,
                 tokensCollected: tokensCollected,
                 totalTokens: totalTokens,
                 stars: stars,
@@ -530,10 +528,6 @@ class _GameScreenState extends ConsumerState<GameScreen>
   }
 
   void _showQuizSummary(QuizResult result) {
-    if (result.passed) {
-      _xpEarnedThisLevel += result.xpEarned;
-    }
-
     final msg = result.passed
         ? 'Maayo! +${result.xpEarned} XP'
         : 'Try harder next time!';
@@ -580,7 +574,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
         children: [
           // ── Parallax background ──────────────────────────────────────────
           CustomPaint(
-            painter: ParallaxPainter(worldX: _worldX, cloudDrift: _cloudDrift),
+            painter: ParallaxPainter(worldX: _worldX, cloudDrift: _cloudDrift, world: widget.world),
             child: const SizedBox.expand(),
           ),
 

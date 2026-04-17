@@ -1,6 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 import 'inventory_screen.dart';
 import 'game_background_painter.dart';
+import 'main_menu_screen.dart';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const _kPanelBorder = Color(0xFF1C0A00);
@@ -153,7 +154,12 @@ class _OptionsPanel extends StatelessWidget {
                   isExit: true,
                   onTap: () {
                     if (isInGame) {
-                      Navigator.of(context).popUntil((r) => r.isFirst);
+                      Navigator.of(context).pushAndRemoveUntil(
+                        MaterialPageRoute(
+                          builder: (_) => const MainMenuScreen(),
+                        ),
+                        (route) => false,
+                      );
                     } else {
                       Navigator.pop(context);
                     }

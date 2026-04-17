@@ -6,7 +6,6 @@ import '../home/main_menu_screen.dart';
 class LevelCompleteScreen extends StatefulWidget {
   final int world;
   final int level;
-  final int xpEarned;
   final int tokensCollected;
   final int totalTokens;
   final int stars;
@@ -17,7 +16,6 @@ class LevelCompleteScreen extends StatefulWidget {
     super.key,
     required this.world,
     required this.level,
-    required this.xpEarned,
     required this.tokensCollected,
     required this.totalTokens,
     required this.stars,
@@ -186,8 +184,6 @@ class _LevelCompleteScreenState extends State<LevelCompleteScreen>
                   SizedBox(height: size.height * 0.025),
 
                   _StatRow('World - Level:', 'W${widget.world} - L${widget.level}', statFontSize),
-                  const SizedBox(height: 8),
-                  _StatRow('XP Earned:', '+${widget.xpEarned} XP', statFontSize),
                   const SizedBox(height: 8),
                   _StatRow(
                     'Tokens Found:',
