@@ -1,4 +1,5 @@
 ﻿import 'package:flutter/material.dart';
+import 'controls_screen.dart';
 import 'inventory_screen.dart';
 import 'game_background_painter.dart';
 import 'main_menu_screen.dart';
@@ -135,6 +136,16 @@ class _OptionsPanel extends StatelessWidget {
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const InventoryScreen()),
+                  ),
+                ),
+                SizedBox(height: panelH * 0.022),
+                _WoodButton(
+                  label: 'Controls',
+                  width: innerW,
+                  height: btnH,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ControlsScreen()),
                   ),
                 ),
                 if (isInGame) ...[

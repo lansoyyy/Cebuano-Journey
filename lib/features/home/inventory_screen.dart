@@ -323,7 +323,7 @@ class _CategoryView extends StatelessWidget {
       children: [
         // Category chips
         SizedBox(
-          height: size.height * 0.055,
+          height: 52,
           child: ListView(
             scrollDirection: Axis.horizontal,
             padding: EdgeInsets.symmetric(horizontal: size.width * 0.015),

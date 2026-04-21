@@ -99,9 +99,9 @@ flutter:
     - assets/images/NPC/npc15/
     - assets/images/NPC/npc16/
     - assets/audio/
-    - assets/audio/music/
-    - assets/audio/sfx/
     - assets/audio/voice/
+    - myassets/music/
+    - myassets/sfx/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

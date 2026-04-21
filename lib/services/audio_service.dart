@@ -20,8 +20,8 @@ class AudioService {
   AudioSettings _settings = const AudioSettings();
 
   // Asset paths
-  static const String _musicPath = 'assets/audio/music/';
-  static const String _sfxPath = 'assets/audio/sfx/';
+  static const String _musicPath = 'myassets/music/';
+  static const String _sfxPath = 'myassets/sfx/';
   static const String _voicePath = 'assets/audio/voice/';
 
   // Current state

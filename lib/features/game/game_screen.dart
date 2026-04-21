@@ -518,7 +518,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
         ),
       ),
     );
-    npc.completed = true;
+    if (result != null) npc.completed = true;
     _last = Duration.zero;
     _ticker.start();
     setState(() => _inQuiz = false);

@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/providers/player_provider.dart';
 import '../../data/level_intro_data.dart';
 
 /// Overlay shown before an NPC quiz.
 /// Displays a short scripted dialogue between the MC and the NPC,
 /// setting the narrative context for the quiz.
-class NpcDialogueScreen extends StatefulWidget {
+class NpcDialogueScreen extends ConsumerStatefulWidget {
   final String npcName;
   final List<NpcDialogueLine> lines;
 
@@ -16,10 +18,10 @@ class NpcDialogueScreen extends StatefulWidget {
   });
 
   @override
-  State<NpcDialogueScreen> createState() => _NpcDialogueScreenState();
+  ConsumerState<NpcDialogueScreen> createState() => _NpcDialogueScreenState();
 }
 
-class _NpcDialogueScreenState extends State<NpcDialogueScreen> {
+class _NpcDialogueScreenState extends ConsumerState<NpcDialogueScreen> {
   int _lineIndex = 0;
   String _displayedText = '';
   Timer? _typeTimer;
@@ -86,7 +88,8 @@ class _NpcDialogueScreenState extends State<NpcDialogueScreen> {
 
     final accentColor =
         isPlayer ? const Color(0xFF5A9EFF) : const Color(0xFFFF8C42);
-    final speakerName = isPlayer ? 'You' : widget.npcName;
+    final playerName = ref.watch(playerProvider).name;
+    final speakerName = isPlayer ? (playerName.isNotEmpty ? playerName : 'You') : widget.npcName;
     final speakerIcon = isPlayer ? '🧑' : '🗣️';
 
     return Scaffold(
