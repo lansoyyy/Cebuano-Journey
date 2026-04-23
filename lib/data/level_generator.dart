@@ -78,7 +78,8 @@ class LevelGenerator {
     // Deterministic NPC sprite ID based on world+level+index, cycling 1-16
     final npcIdBase = ((world - 1) * 5 + (level - 1)) * npcCount;
     for (int i = 0; i < npcCount; i++) {
-      final npcX = worldLength * ((i + 1) / (npcCount + 1));
+      // Distribute regular NPCs across first 75% of the world
+      final npcX = worldLength * ((i + 1) / (npcCount + 1)) * 0.75;
       final quizWords = _pickRandom(tokenWords, min(4, tokenWords.length), rng);
       npcs.add(
         LevelNPC(
@@ -90,6 +91,19 @@ class LevelGenerator {
         ),
       );
     }
+
+    // ── Gatekeeper NPC at the end ────────────────────────────────────────────
+    final gatekeeperWords = _pickRandom(tokenWords, min(5, tokenWords.length), rng);
+    npcs.add(
+      LevelNPC(
+        worldX: worldLength * 0.90,
+        name: 'Gatekeeper',
+        greeting: 'Dili ka makaabot sa sunod nga lebel kung wala ka moagi sa akong pagsulay!',
+        questions: _buildQuestions(gatekeeperWords, levelWords, rng, difficulty + 1),
+        npcId: (npcIdBase + npcCount) % 16 + 1,
+        isGatekeeper: true,
+      ),
+    );
 
     // ── Hints (1-2 per level on hard to reach platforms) ────────────────────
     final hints = <LevelHint>[];

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/level_data.dart';
+import '../../core/models/word_token.dart';
 import '../../core/providers/player_provider.dart';
 import '../../data/level_generator.dart';
 import '../../data/level_intro_data.dart';
@@ -85,6 +86,9 @@ class _GameScreenState extends ConsumerState<GameScreen>
   // NPC proximity
   LevelNPC? _nearNPC;
 
+  // Coin lesson popup
+  WordToken? _lessonWord;
+
   // Game session stats
   bool _levelCompleteHandled = false;
 
@@ -131,6 +135,12 @@ class _GameScreenState extends ConsumerState<GameScreen>
 
   void _onTick(Duration elapsed) {
     if (_inQuiz || _levelCompleteHandled) return;
+
+    // Pause physics/movement while lesson popup is visible
+    if (_lessonWord != null) {
+      _last = elapsed;
+      return;
+    }
 
     // Check hearts
     final player = ref.read(playerProvider);
@@ -306,6 +316,10 @@ class _GameScreenState extends ConsumerState<GameScreen>
           (token.screenY - charY).abs() < 60) {
         token.collected = true;
         ref.read(playerProvider.notifier).collectWord(token.word.id);
+        // Show lesson popup for the first newly collected token
+        if (_lessonWord == null) {
+          _lessonWord = token.word;
+        }
       }
     }
   }
@@ -366,11 +380,14 @@ class _GameScreenState extends ConsumerState<GameScreen>
   void _checkLevelComplete() {
     if (_levelData == null || _levelCompleteHandled) return;
 
-    // Win condition: Reached the end of the world OR all NPCs are completed
-    final allNpcsDone = _levelData!.npcs.every((n) => n.completed);
-    final reachedEnd = _worldX >= _levelData!.worldLength - 100;
+    // Win condition: the gatekeeper NPC (if present) must be completed.
+    // If no gatekeeper exists, fall back to all regular NPCs completed.
+    final gatekeeper = _levelData!.npcs.where((n) => n.isGatekeeper).firstOrNull;
+    final shouldComplete = gatekeeper != null
+        ? gatekeeper.completed
+        : _levelData!.npcs.every((n) => n.completed);
 
-    if (allNpcsDone || reachedEnd) {
+    if (shouldComplete) {
       _levelCompleteHandled = true;
       _ticker.stop();
       _showLevelComplete();
@@ -523,7 +540,20 @@ class _GameScreenState extends ConsumerState<GameScreen>
     _ticker.start();
     setState(() => _inQuiz = false);
     if (result != null && mounted) {
-      _showQuizSummary(result);
+      if (npc.isGatekeeper) {
+        if (result.passed) {
+          // Gatekeeper passed — complete the level
+          _levelCompleteHandled = true;
+          _ticker.stop();
+          _showLevelComplete();
+        } else {
+          // Failed gatekeeper — mark incomplete so player can retry
+          npc.completed = false;
+          _showQuizSummary(result);
+        }
+      } else {
+        _showQuizSummary(result);
+      }
     }
   }
 
@@ -626,6 +656,7 @@ class _GameScreenState extends ConsumerState<GameScreen>
                   npcId: npc.npcId,
                   completed: npc.completed,
                   isNear: _nearNPC == npc,
+                  isGatekeeper: npc.isGatekeeper,
                   size: size,
                 ),
               );
@@ -679,8 +710,6 @@ class _GameScreenState extends ConsumerState<GameScreen>
               color: const Color(0x66000000),
             ),
           ),
-
-          // ── D-pad ────────────────────────────────────────────────────────
           Positioned(
             bottom: size.height * 0.045,
             left: size.width * 0.025,
@@ -793,7 +822,195 @@ class _GameScreenState extends ConsumerState<GameScreen>
               ),
             ),
           ),
+
+          // ── Coin lesson popup ─────────────────────────────────────────────
+          if (_lessonWord != null)
+            _LessonPopup(
+              word: _lessonWord!,
+              onDismiss: () => setState(() => _lessonWord = null),
+              size: size,
+            ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Lesson popup ──────────────────────────────────────────────────────────────
+class _LessonPopup extends StatefulWidget {
+  final WordToken word;
+  final VoidCallback onDismiss;
+  final Size size;
+  const _LessonPopup(
+      {required this.word, required this.onDismiss, required this.size});
+  @override
+  State<_LessonPopup> createState() => _LessonPopupState();
+}
+
+class _LessonPopupState extends State<_LessonPopup>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 250));
+    _scale = CurvedAnimation(parent: _ctrl, curve: Curves.elasticOut);
+    _ctrl.forward();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final w = widget.word;
+    final isPhone = widget.size.width < 700;
+    final cardW = (widget.size.width * 0.82).clamp(260.0, 420.0);
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.onDismiss,
+      child: Container(
+        color: Colors.black54,
+        child: Center(
+          child: ScaleTransition(
+            scale: _scale,
+            child: GestureDetector(
+              onTap: () {},
+              child: Container(
+                width: cardW,
+                decoration: BoxDecoration(
+                  color: const Color(0xF2FFFFFF),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: const Color(0xFFFFD700), width: 3),
+                  boxShadow: const [
+                    BoxShadow(
+                        color: Color(0x55000000),
+                        blurRadius: 16,
+                        offset: Offset(0, 6))
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Gold header
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFFFD700),
+                        borderRadius:
+                            BorderRadius.vertical(top: Radius.circular(15)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text('🪙',
+                              style: TextStyle(fontSize: 18)),
+                          const SizedBox(width: 6),
+                          Text(
+                            'New Word Collected!',
+                            style: TextStyle(
+                                color: Colors.black87,
+                                fontWeight: FontWeight.w900,
+                                fontSize: isPhone ? 13 : 15,
+                                letterSpacing: 1),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Cebuano word
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+                      child: Text(
+                        '"${w.cebuano}"',
+                        style: TextStyle(
+                            color: const Color(0xFF1A1A1A),
+                            fontWeight: FontWeight.w900,
+                            fontSize: isPhone ? 28 : 34),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    // Meaning + category
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Text(
+                        'Means "${w.english}" — ${w.category}',
+                        style: TextStyle(
+                            color: const Color(0xFF444444),
+                            fontSize: isPhone ? 13 : 15),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    // Example sentence
+                    if (w.example != null) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 16),
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF0F4FF),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFB0C4DE)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              w.example!,
+                              style: TextStyle(
+                                  color: const Color(0xFF1A3A6C),
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: isPhone ? 12 : 14,
+                                  fontStyle: FontStyle.italic),
+                            ),
+                            if (w.exampleEn != null) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                w.exampleEn!,
+                                style: TextStyle(
+                                    color: const Color(0xFF555555),
+                                    fontSize: isPhone ? 11 : 13),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                    // Got it button
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
+                      child: GestureDetector(
+                        onTap: widget.onDismiss,
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          decoration: BoxDecoration(
+                              color: const Color(0xFF2A5FBF),
+                              borderRadius: BorderRadius.circular(10)),
+                          child: Text(
+                            'Got it!',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                                fontSize: isPhone ? 14 : 16),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -935,6 +1152,7 @@ class _NPCWidget extends StatefulWidget {
   final int npcId;
   final bool completed;
   final bool isNear;
+  final bool isGatekeeper;
   final Size size;
 
   const _NPCWidget({
@@ -942,6 +1160,7 @@ class _NPCWidget extends StatefulWidget {
     required this.npcId,
     required this.completed,
     required this.isNear,
+    required this.isGatekeeper,
     required this.size,
   });
 
@@ -1011,13 +1230,19 @@ class _NPCWidgetState extends State<_NPCWidget>
           decoration: BoxDecoration(
             color: widget.completed
                 ? const Color(0xCC1A4A1A)
-                : const Color(0xCC1A1A3A),
+                : widget.isGatekeeper
+                    ? const Color(0xCC4A1A00)
+                    : const Color(0xCC1A1A3A),
             borderRadius: BorderRadius.circular(4),
           ),
           child: Text(
             widget.name,
             style: TextStyle(
-              color: widget.completed ? const Color(0xFF80FF80) : Colors.white,
+              color: widget.completed
+                  ? const Color(0xFF80FF80)
+                  : widget.isGatekeeper
+                      ? const Color(0xFFFF8C42)
+                      : Colors.white,
               fontSize: widget.size.height * 0.022,
               fontWeight: FontWeight.bold,
               shadows: const [Shadow(color: Colors.black, blurRadius: 4)],
@@ -1064,15 +1289,17 @@ class _NPCWidgetState extends State<_NPCWidget>
                 child: Container(
                   width: spriteW * 0.36,
                   height: spriteW * 0.36,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFFFD700),
+                  decoration: BoxDecoration(
+                    color: widget.isGatekeeper
+                        ? const Color(0xFFFF4500)
+                        : const Color(0xFFFFD700),
                     shape: BoxShape.circle,
                   ),
                   child: const Center(
                     child: Text(
                       '!',
                       style: TextStyle(
-                        color: Colors.black,
+                        color: Colors.white,
                         fontWeight: FontWeight.w900,
                         fontSize: 13,
                       ),

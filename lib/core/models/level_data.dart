@@ -52,6 +52,7 @@ class LevelNPC {
   final String greeting;
   final List<QuizQuestion> questions;
   final int npcId;
+  final bool isGatekeeper;
   bool completed;
 
   LevelNPC({
@@ -60,6 +61,7 @@ class LevelNPC {
     required this.greeting,
     required this.questions,
     required this.npcId,
+    this.isGatekeeper = false,
     this.completed = false,
   });
 }
