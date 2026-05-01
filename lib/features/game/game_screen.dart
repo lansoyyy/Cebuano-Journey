@@ -319,6 +319,10 @@ class _GameScreenState extends ConsumerState<GameScreen>
         // Show lesson popup for the first newly collected token
         if (_lessonWord == null) {
           _lessonWord = token.word;
+          // Clear movement state so ghost-touch doesn't persist after popup
+          _movingLeft = false;
+          _movingRight = false;
+          _isCrouching = false;
         }
       }
     }

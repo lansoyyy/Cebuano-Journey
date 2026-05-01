@@ -13,13 +13,13 @@ class LevelSelectScreen extends ConsumerWidget {
     final player = ref.watch(playerProvider);
     final size = MediaQuery.of(context).size;
 
-    // Determine how many worlds to display (always at least 1, up to 4)
+    // Determine how many worlds to display (always at least 1, up to 5)
     // A world is shown when the previous world's level 5 has been completed
     int totalWorlds = 1;
-    for (int w = 1; w <= 3; w++) {
+    for (int w = 1; w <= 4; w++) {
       if (player.starsFor(w, 5) > 0) totalWorlds = w + 1;
     }
-    totalWorlds = totalWorlds.clamp(1, 4);
+    totalWorlds = totalWorlds.clamp(1, 5);
 
     // Helper: level is unlocked if it is W1-L1, or if the prior level has stars
     bool isLevelUnlocked(int worldNum, int levelNum) {

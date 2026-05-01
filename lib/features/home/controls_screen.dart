@@ -60,24 +60,26 @@ class ControlsScreen extends StatelessWidget {
                 ),
 
                 Expanded(
-                  child: Center(
-                    child: Container(
-                      margin: EdgeInsets.all(size.width * 0.05),
-                      padding: EdgeInsets.all(size.width * 0.04),
-                      decoration: BoxDecoration(
-                        color: const Color(0xDD1A1A2E),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.white24, width: 1.5),
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          for (final ctrl in _controls) ...[
-                            _ControlRow(control: ctrl, size: size),
-                            if (ctrl != _controls.last)
-                              Divider(color: Colors.white12, height: 1),
+                  child: SingleChildScrollView(
+                    child: Center(
+                      child: Container(
+                        margin: EdgeInsets.all(size.width * 0.05),
+                        padding: EdgeInsets.all(size.width * 0.04),
+                        decoration: BoxDecoration(
+                          color: const Color(0xDD1A1A2E),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.white24, width: 1.5),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            for (final ctrl in _controls) ...[
+                              _ControlRow(control: ctrl, size: size),
+                              if (ctrl != _controls.last)
+                                Divider(color: Colors.white12, height: 1),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
                     ),
                   ),

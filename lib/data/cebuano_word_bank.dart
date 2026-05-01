@@ -87,18 +87,57 @@ class CebuanoWordBank {
   static List<WordToken> byCategory(String category) =>
       words.where((w) => w.category == category).toList();
 
-  static List<WordToken> forLevel(int levelNumber) {
-    final count = (levelNumber * 3 + 5).clamp(5, words.length);
-    return words.take(count).toList();
+  /// Maps each vocabulary category to a module lesson group number, matching
+  /// the official Cebuano module progression:
+  ///   1 = Greetings & Honorifics (Lesson 1)
+  ///   2 = Nominative Markers / Family vocabulary (Lesson 2-3)
+  ///   4 = Basic Adjectives & Particularizers (Lesson 4)
+  ///   5 = Numbers & Exclamatory Adjectives (Lesson 5)
+  ///   6 = Existentials, Locatives & Food vocabulary (Lesson 6)
+  ///   7 = Prepositions, Directions & Places (Lesson 7)
+  ///   8 = Agent Voice Verbs (Lesson 8+)
+  static int _lessonGroupForCategory(String category) {
+    switch (category) {
+      case 'Greetings':
+        return 1;
+      case 'Family':
+        return 2;
+      case 'Colors':
+      case 'Adjectives':
+        return 4;
+      case 'Numbers':
+        return 5;
+      case 'Food':
+        return 6;
+      case 'Places':
+        return 7;
+      case 'Verbs':
+        return 8;
+      default:
+        return 1;
+    }
   }
 
-  /// Returns the global level number (difficulty) at which this word first
-  /// becomes available, using the same formula as [forLevel].
-  /// forLevel(n) = take(n*3+5), so word at index i first appears at
-  /// level n where n*3+5 > i  →  n = ceil((i-4)/3), minimum 1.
+  /// Returns the word pool for a given difficulty level, respecting the module
+  /// progression.  Each difficulty step (1–25 across 5 worlds) unlocks one
+  /// additional lesson group so tokens in-game always reflect the current
+  /// and previously studied module content.
+  static List<WordToken> forLevel(int levelNumber) {
+    // Map difficulty 1-25 → lesson group 1-8
+    final maxLesson = ((levelNumber * 8) / 25).ceil().clamp(1, 8);
+    final pool = words
+        .where((w) => _lessonGroupForCategory(w.category) <= maxLesson)
+        .toList();
+    return pool.isNotEmpty ? pool : words.take(8).toList();
+  }
+
+  /// Returns the difficulty level at which this word first becomes available,
+  /// derived from its lesson group using the same mapping as [forLevel].
+  /// Inverse of: maxLesson = ceil(difficulty * 8 / 25)
+  /// → difficulty = ceil(lessonGroup * 25 / 8), minimum 1.
   static int levelForWord(String wordId) {
-    final idx = words.indexWhere((w) => w.id == wordId);
-    if (idx < 0) return 1;
-    return (((idx - 4) / 3).ceil()).clamp(1, 99);
+    final word = words.firstWhere((w) => w.id == wordId, orElse: () => words.first);
+    final lessonGroup = _lessonGroupForCategory(word.category);
+    return ((lessonGroup * 25) / 8).ceil().clamp(1, 25);
   }
 }
